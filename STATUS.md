@@ -33,16 +33,17 @@ WONJU STATION is a responsive Wonju regional-life dashboard. It shows sourced we
 - Naver, KMA, AirKorea and Kakao live-provider certification awaits owner credentials/provider-console setup.
 - Gemini live certification is blocked by the requested model not existing in the official API, in addition to the missing key.
 - Rate limiting is bounded per runtime instance, not distributed, because the MVP intentionally has no persistence service.
+- The deployed v1.1 build remains owner-only. Sites rejected the autonomous persistent access-policy change and requires fresh owner confirmation before public access can be enabled.
 
 ## Human next action
 
-Add the credential values listed above to Sites production environment variables, register the Sites URL in Kakao Developers, then redeploy. For Gemini, wait until Google exposes the requested `gemini-3.6-flash-lite` model identifier; no source edit is required if it appears under that ID.
+In Sites sharing, change access to **Public** (or explicitly approve that access change when requested). Add the credential values listed above, register the Sites URL in Kakao Developers, then redeploy. For Gemini, wait until Google exposes the requested `gemini-3.6-flash-lite` model identifier; no source edit is required if it appears under that ID.
 
 ## Deployment
 
-- Visibility: public
+- Visibility: owner-only (`custom`, owner is the only allowed user)
 - URL: https://wonju-station-live.tsiba5021.chatgpt.site
-- Certification: local safety/correctness and representative desktop/mobile flows passed; hosted v1.1 was publicly recertified at delivery.
+- Certification: local safety/correctness and representative desktop/mobile flows passed; hosted v1.1 passed owner-session runtime checks. Public/unauthenticated certification is pending the access change above.
 
 ## Release state
 
