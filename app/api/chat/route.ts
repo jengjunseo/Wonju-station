@@ -1,4 +1,18 @@
-import { askGemini, CHAT_HISTORY_LIMIT, CHAT_UNAVAILABLE_MESSAGE, CHAT_UNSUPPORTED_MESSAGE, checkGeminiModel, GEMINI_MODEL, selectGroundedContext, validateChatInput, type ChatTurn } from "../../../lib/chat";
+import {
+  ambiguousWonjuReply,
+  askGemini,
+  CHAT_HISTORY_LIMIT,
+  CHAT_UNAVAILABLE_MESSAGE,
+  CHAT_UNSUPPORTED_MESSAGE,
+  checkGeminiModel,
+  GEMINI_MODEL,
+  isAmbiguousWonjuQuestion,
+  outOfScopeReply,
+  routeChatQuestion,
+  selectGroundedContext,
+  validateChatInput,
+  type ChatTurn,
+} from "../../../lib/chat";
 import { getCitySnapshot } from "../../../lib/providers";
 
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -35,7 +49,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const key = apiKey();
-  if (!key || !await checkGeminiModel(key)) return Response.json({ available: false, message: CHAT_UNAVAILABLE_MESSAGE }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  if (!key) return Response.json({ available: false, message: CHAT_UNAVAILABLE_MESSAGE }, { status: 503, headers: { "Cache-Control": "no-store" } });
   if (rateLimited(request)) return Response.json({ available: true, message: "잠시 후 다시 질문해 주세요." }, { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } });
   let body: { question?: unknown; history?: unknown };
   try { body = await request.json() as typeof body; } catch { return Response.json({ available: true, message: "질문 형식을 확인해 주세요." }, { status: 400 }); }
@@ -47,13 +61,25 @@ export async function POST(request: Request) {
     const text = validateChatInput(candidate.text);
     return (candidate.role === "user" || candidate.role === "assistant") && text ? [{ role: candidate.role, text }] : [];
   }) : [];
-  const snapshot = await getCitySnapshot();
-  const context = selectGroundedContext(question, snapshot);
-  if (!context) return Response.json({ available: true, message: CHAT_UNSUPPORTED_MESSAGE, sources: [] }, { headers: { "Cache-Control": "no-store" } });
+
+  const mode = routeChatQuestion(question);
+  if (mode === "OUT_OF_SCOPE") {
+    return Response.json({ available: true, mode, searchUsed: false, message: outOfScopeReply(question), sources: [] }, { headers: { "Cache-Control": "no-store" } });
+  }
+  if (mode === "CHAT" && isAmbiguousWonjuQuestion(question)) {
+    return Response.json({ available: true, mode, searchUsed: false, message: ambiguousWonjuReply(), sources: [] }, { headers: { "Cache-Control": "no-store" } });
+  }
+  if (!await checkGeminiModel(key)) return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
+
+  const context = mode === "STATION" ? selectGroundedContext(question, await getCitySnapshot()) : null;
+  if (mode === "STATION" && !context) {
+    return Response.json({ available: true, mode, searchUsed: false, message: CHAT_UNSUPPORTED_MESSAGE, sources: [] }, { headers: { "Cache-Control": "no-store" } });
+  }
   try {
-    const message = await askGemini(question, context, history, key);
-    return Response.json({ available: true, message, sources: context.sources }, { headers: { "Cache-Control": "no-store" } });
+    const answer = await askGemini(question, context, history, key, mode);
+    const sources = mode === "STATION" ? context?.sources ?? [] : answer.sources;
+    return Response.json({ available: true, mode, searchUsed: answer.searchUsed, message: answer.message, sources }, { headers: { "Cache-Control": "no-store" } });
   } catch {
-    return Response.json({ available: false, message: CHAT_UNAVAILABLE_MESSAGE }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }
