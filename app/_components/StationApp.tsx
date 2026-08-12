@@ -17,6 +17,32 @@ const NAV = [
   ["/events", "EVENTS"], ["/city", "CITY"], ["/history", "HISTORY"], ["/discover", "DISCOVER"],
 ];
 
+const VERIFIED_EVENTS = [
+  { date: "2026-08-15", time: "15:00 / 19:00", title: "박경리 탄생 100주년 무용극 〈토지〉", place: "치악예술관", source: "https://www.wonju.go.kr/tojipark/main.do" },
+  { date: "2026-07-06 — 10-05", time: "09:00 — 18:00", title: "원주시역사박물관 기획전시", place: "원주시역사박물관", source: "https://whm.wonju.go.kr/whm/main.php" },
+];
+
+const HISTORY_TIMELINE = [
+  { year: "678", title: "북원소경", text: "통일신라의 9주 5소경 정비 때 북원소경이 설치되었습니다." },
+  { year: "940", title: "‘원주’라는 이름", text: "고려 태조 23년에 북원경을 폐지하고 원주로 개칭했습니다." },
+  { year: "1395", title: "강원감영 설치", text: "조선이 강원도의 수부를 원주로 정하고 강원감영을 설치했습니다." },
+  { year: "1955", title: "원주시 승격", text: "원주읍이 원주시로 승격되어 현대 도시 행정의 장을 열었습니다." },
+  { year: "1995", title: "도농 통합", text: "원주시와 원주군이 통합되어 오늘의 행정권역이 형성되었습니다." },
+  { year: "2019", title: "유네스코 문학 창의도시", text: "문학을 도시의 지속 가능한 자산으로 연결하는 국제 네트워크에 합류했습니다." },
+];
+
+const HISTORICAL_PEOPLE = [
+  { name: "임윤지당", label: "여성 성리학자", text: "원주를 대표하는 여성 성리학자. 선양관이 학문적 성과와 정신을 잇고 있습니다.", source: "https://whm.wonju.go.kr/whm/page/view.php/sub_09_02" },
+  { name: "최규하", label: "대한민국 제10대 대통령", text: "원주 출신으로, 역사박물관 현석실이 유족 기증 유품을 전시합니다.", source: "https://whm.wonju.go.kr/whm/page/view.php/sub_02_01_04" },
+  { name: "박경리", label: "소설가", text: "1980년부터 2008년까지 원주에서 살며 『토지』 4·5부와 생명사상을 완성했습니다.", source: "https://www.wonju.go.kr/cityofliterature/user_sub.php?gid=www&mu_idx=253" },
+];
+
+const VERIFIED_PLACES = [
+  { name: "강원감영", district: "일산동", address: "원주시 원일로 77", note: "1395년부터 500년간 강원도의 수부", source: "https://www.wonju.go.kr/tour/contents.do?%5C=&key=5523" },
+  { name: "박경리문학공원", district: "단구동", address: "원주시 토지길 1", note: "10:00–17:00 · 월요일 휴관 · 무료", source: "https://www.wonju.go.kr/tour/contents.do?key=6479" },
+  { name: "원주시역사박물관", district: "봉산동", address: "원주시 봉산로 134", note: "09:00–18:00 · 월요일 휴관", source: "https://whm.wonju.go.kr/whm/main.php" },
+];
+
 const UNAVAILABLE_SNAPSHOT: CitySnapshot = {
   generatedAt: new Date(0).toISOString(),
   weather: {
@@ -37,6 +63,11 @@ const UNAVAILABLE_SNAPSHOT: CitySnapshot = {
     provider: "원주시청 새소식", sourceUrl: "https://www.wonju.go.kr/www/sub.do?key=209", status: "UNAVAILABLE",
     fetchedAt: null, detail: "연결 중", items: [],
   },
+  population: {
+    provider: "원주통계정보 월별인구현황", sourceUrl: "https://www.wonju.go.kr/stat/selectBbsNttList.do?bbsNo=1229&key=6313", status: "UNAVAILABLE",
+    fetchedAt: null, detail: "연결 중", period: null, population: null, households: null, male: null, female: null, populationChange: null, householdChange: null,
+  },
+  mayor: { provider: "원주시청", sourceUrl: "https://www.wonju.go.kr/www/main.do", status: "UNAVAILABLE", fetchedAt: null, detail: "연결 중", name: null },
 };
 
 const PAGE_INFO: Record<string, { eyebrow: string; title: string; summary: string; metrics: Array<[string, string]> }> = {
@@ -239,6 +270,8 @@ export function StationApp({ route }: { route: string }) {
           <ProviderLine label={snapshot.air.provider} status={snapshot.air.status} time={snapshot.air.fetchedAt} href={snapshot.air.sourceUrl} />
           <ProviderLine label={snapshot.notices.provider} status={snapshot.notices.status} time={snapshot.notices.fetchedAt} href={snapshot.notices.sourceUrl} />
           <ProviderLine label={snapshot.alerts.provider} status={snapshot.alerts.status} time={snapshot.alerts.fetchedAt} href={snapshot.alerts.sourceUrl} />
+          <ProviderLine label={snapshot.population.provider} status={snapshot.population.status} time={snapshot.population.fetchedAt} href={snapshot.population.sourceUrl} />
+          <ProviderLine label={`${snapshot.mayor.provider} · 시장 표기`} status={snapshot.mayor.status} time={snapshot.mayor.fetchedAt} href={snapshot.mayor.sourceUrl} />
         </section>
       </>
     );
@@ -287,9 +320,9 @@ export function StationApp({ route }: { route: string }) {
 
   function renderEvents() {
     return (
-      <PageShell eyebrow="EVENTS & CALENDAR" title="오늘 원주에서 무슨 일이 열리나" intro="날짜·장소·주최·공식 링크가 모두 확인된 행사만 표시합니다. 현재 수집 계약이 확인되지 않아 포털 연결 상태로 제공합니다.">
+      <PageShell eyebrow="EVENTS & CALENDAR" title="오늘 원주에서 무슨 일이 열리나" intro="날짜·장소·주최·공식 링크가 모두 확인된 행사만 표시합니다. 자동 수집을 가장하지 않고, 공식 행사 중 직접 검증한 일정과 원문을 제공합니다.">
         <div className="date-strip">{["오늘", "목", "금", "토", "일", "월", "화"].map((day, i) => <div className={i === 0 ? "active" : ""} key={day}><strong>{12 + i}</strong><span>{day}</span></div>)}</div>
-        <Unavailable title="검증된 행사 일정 없음" detail="날짜가 지난 행사나 출처 없는 이벤트를 채워 넣지 않습니다." href="https://www.wonju.go.kr/www/sub.do?key=213" />
+        <div className="event-list">{VERIFIED_EVENTS.map((event, index) => <a href={event.source} target="_blank" rel="noreferrer" key={event.title}><span>{String(index + 1).padStart(2, "0")}</span><time>{event.date}<small>{event.time}</small></time><div><small>{event.place}</small><h2>{event.title}</h2></div><b>VERIFIED ↗</b></a>)}</div>
         <div className="link-cards"><a href="https://www.wonju.go.kr/www/sub.do?key=213" target="_blank" rel="noreferrer"><span>01</span><strong>원주시 문화행사</strong><small>공식 일정 열기 ↗</small></a><a href="https://www.wonju.go.kr/tour/index.do" target="_blank" rel="noreferrer"><span>02</span><strong>원주관광</strong><small>공식 관광 정보 ↗</small></a></div>
       </PageShell>
     );
@@ -308,6 +341,27 @@ export function StationApp({ route }: { route: string }) {
   function renderGeneric() {
     if (routeKey === "air") {
       return <PageShell eyebrow="AIR DESK" title="원주의 공기" intro="실패를 0㎍/㎥로 바꾸지 않는 대기질 화면입니다."><div className="air-hero"><div><span>AIR GRADE</span><strong>{snapshot.air.grade ?? "—"}</strong></div><div><span>PM10</span><strong>{formatValue(snapshot.air.pm10)}</strong><small>㎍/㎥</small></div><div><span>PM2.5</span><strong>{formatValue(snapshot.air.pm25)}</strong><small>㎍/㎥</small></div></div><ProviderLine label={snapshot.air.provider} status={snapshot.air.status} time={snapshot.air.fetchedAt} href={snapshot.air.sourceUrl} /></PageShell>;
+    }
+    if (routeKey === "city" || routeKey === "mayor") {
+      return <PageShell eyebrow="CITY DESK" title="원주를 숫자와 책임으로 읽다" intro="현재 행정 정보는 원주시 공식 페이지에서 매번 확인해 표시합니다. 시장 이름이나 인구를 소스 코드에 고정하지 않습니다."><div className="city-facts"><article><span>CURRENT MAYOR</span><strong>{snapshot.mayor.name ?? "—"}</strong><small>원주시청 공식 표기</small><FreshnessBadge status={snapshot.mayor.status} /></article><article><span>REGISTERED POPULATION</span><strong>{snapshot.population.population?.toLocaleString("ko-KR") ?? "—"}</strong><small>{snapshot.population.period ?? "기준일 없음"} · 외국인 제외</small><FreshnessBadge status={snapshot.population.status} /></article><article><span>HOUSEHOLDS</span><strong>{snapshot.population.households?.toLocaleString("ko-KR") ?? "—"}</strong><small>전월 대비 {snapshot.population.householdChange === null ? "—" : `${snapshot.population.householdChange > 0 ? "+" : ""}${snapshot.population.householdChange.toLocaleString("ko-KR")}`}</small></article></div><div className="official-links"><a href={snapshot.mayor.sourceUrl} target="_blank" rel="noreferrer">원주시청 ↗</a><a href={snapshot.population.sourceUrl} target="_blank" rel="noreferrer">월별 인구현황 ↗</a><a href="https://www.wonju.go.kr/stat/index.do" target="_blank" rel="noreferrer">원주통계정보 ↗</a></div></PageShell>;
+    }
+    if (routeKey === "population" || routeKey === "stats") {
+      const population = snapshot.population.population;
+      const maleShare = population && snapshot.population.male ? snapshot.population.male / population * 100 : 0;
+      const femaleShare = population && snapshot.population.female ? snapshot.population.female / population * 100 : 0;
+      return <PageShell eyebrow={routeKey === "population" ? "POPULATION" : "CITY STATISTICS"} title="수치에는 기준일이 있다" intro="원주통계정보의 최신 월별 게시물을 서버에서 읽어 숫자와 기준일을 함께 제공합니다. 파싱에 실패하면 이전값을 현재처럼 노출하지 않습니다."><div className="population-hero"><span>{snapshot.population.period ?? "LATEST VERIFIED PERIOD"}</span><strong>{population?.toLocaleString("ko-KR") ?? "—"}<small>명 · 외국인 제외</small></strong><p>전월 대비 {snapshot.population.populationChange === null ? "—" : `${snapshot.population.populationChange > 0 ? "+" : ""}${snapshot.population.populationChange.toLocaleString("ko-KR")}명`}</p></div><div className="population-bars"><div><span>남성 {snapshot.population.male?.toLocaleString("ko-KR") ?? "—"}</span><i><b style={{ width: `${maleShare}%` }} /></i><strong>{maleShare ? `${maleShare.toFixed(1)}%` : "—"}</strong></div><div><span>여성 {snapshot.population.female?.toLocaleString("ko-KR") ?? "—"}</span><i><b style={{ width: `${femaleShare}%` }} /></i><strong>{femaleShare ? `${femaleShare.toFixed(1)}%` : "—"}</strong></div></div><ProviderLine label={snapshot.population.provider} status={snapshot.population.status} time={snapshot.population.fetchedAt} href={snapshot.population.sourceUrl} /></PageShell>;
+    }
+    if (routeKey === "history" || routeKey === "timeline" || routeKey === "people") {
+      return <PageShell eyebrow="CITY ARCHIVE" title="시간 위에 세워진 원주" intro="원주시 연혁과 원주시역사박물관의 공식 설명을 짧게 재구성했습니다. 해석을 덧붙이기보다 출처로 돌아갈 수 있게 합니다."><div className="timeline">{HISTORY_TIMELINE.map((item) => <article key={item.year}><strong>{item.year}</strong><div><h2>{item.title}</h2><p>{item.text}</p></div></article>)}</div><a className="source-block" href="https://www.wonju.go.kr/www/contents.do?key=231" target="_blank" rel="noreferrer"><span>PRIMARY SOURCE</span><strong>원주시 공식 연혁 전체 보기 ↗</strong></a><SectionHead index="P" kicker="PEOPLE OF WONJU" title="도시를 만든 사람들" /><div className="people-grid">{HISTORICAL_PEOPLE.map((person) => <a href={person.source} target="_blank" rel="noreferrer" key={person.name}><span>{person.label}</span><h2>{person.name}</h2><p>{person.text}</p><b>공식 자료 ↗</b></a>)}</div></PageShell>;
+    }
+    if (routeKey === "transport") {
+      return <PageShell eyebrow="MOBILITY" title="원주 이동의 공식 출발점" intro="실시간 도착 시간을 추정하지 않습니다. 원주시 교통정보센터와 원주관광의 공식 운행 정보로 바로 연결합니다."><div className="transport-grid"><a href="https://its.wonju.go.kr/" target="_blank" rel="noreferrer"><span>01 · LIVE TRAFFIC</span><h2>원주시 교통정보센터</h2><p>도로 소통, 버스 정보와 주차장 현황</p><b>OPEN ↗</b></a><a href="https://its.wonju.go.kr/parking/comm.do" target="_blank" rel="noreferrer"><span>02 · PARKING</span><h2>공영주차장</h2><p>주소와 주차면을 확인하는 공식 목록</p><b>OPEN ↗</b></a><a href="https://www.wonju.go.kr/tour/contents.do?key=6509" target="_blank" rel="noreferrer"><span>03 · CITY TOUR</span><h2>순환형 시티투어</h2><p>운행일, 요금과 정류장 시간표</p><b>OPEN ↗</b></a></div></PageShell>;
+    }
+    if (routeKey === "discover" || routeKey === "lost") {
+      return <PageShell eyebrow={routeKey === "lost" ? "LOST IN WONJU" : "WEEKEND DESK"} title={routeKey === "lost" ? "우연에도 출처가 필요하다" : "이번 주말, 원주 어디로 갈까"} intro="원주관광과 시립 시설 페이지에서 주소와 운영 정보가 확인된 장소만 제안합니다. 방문 전 원문에서 휴무와 현장 상황을 다시 확인하세요."><div className="place-grid">{VERIFIED_PLACES.map((place, index) => <a href={place.source} target="_blank" rel="noreferrer" key={place.name}><span>{String(index + 1).padStart(2, "0")} · {place.district}</span><h2>{place.name}</h2><p>{place.note}</p><small>{place.address}</small><b>공식 정보 ↗</b></a>)}</div></PageShell>;
+    }
+    if (routeKey === "projects") {
+      return <PageShell eyebrow="WONJU NEXT" title="도시의 다음 장면" intro="계획과 완료를 구분해 공식 발표만 기록합니다. 현재는 검증 가능한 대표 사업 하나를 시작점으로 제공합니다."><div className="project-feature"><span>PLAN · 2026</span><h2>공영주차장 1,042면 조성 추진</h2><p>원주시는 2026년 구도심과 주거 밀집 지역을 중심으로 공영주차장 조성을 계속 추진한다고 발표했습니다. ‘계획’ 상태이며 완료로 표시하지 않습니다.</p><a href="https://www.wonju.go.kr/media/selectBbsNttView.do?bbsNo=145&key=3450&nttNo=475645" target="_blank" rel="noreferrer">원주시 공식 보도자료 ↗</a></div></PageShell>;
     }
     const info = PAGE_INFO[routeKey] ?? PAGE_INFO.city;
     return <PageShell eyebrow={info.eyebrow} title={info.title} intro={info.summary}><div className="metric-panels">{info.metrics.map(([label, value], index) => <article key={label}><span>{String(index + 1).padStart(2, "0")}</span><h2>{label}</h2><strong>{value}</strong></article>)}</div><div className="system-note"><span>DATA INTEGRITY</span><h2>빈 상태도 도시의 상태입니다.</h2><p>공식 제공자가 연결되지 않은 현재값은 추정하지 않습니다. 이 화면의 구조와 실패 경계는 준비되어 있으며, 검증 가능한 소스가 들어오는 순간 같은 인터페이스에서 표시됩니다.</p></div></PageShell>;

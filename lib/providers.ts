@@ -1,9 +1,11 @@
-import { airGrade, dedupeNotices, type AirSnapshot, type AlertSnapshot, type CitySnapshot, type Notice, type WeatherSnapshot } from "./city";
+import { airGrade, dedupeNotices, type AirSnapshot, type AlertSnapshot, type CitySnapshot, type MayorSnapshot, type Notice, type PopulationSnapshot, type WeatherSnapshot } from "./city.ts";
 
 const WONJU = { latitude: 37.3422, longitude: 127.9202 };
 const WONJU_NEWS_URL = "https://www.wonju.go.kr/www/sub.do?key=209";
 const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
 const OPEN_METEO_AIR_URL = "https://air-quality-api.open-meteo.com/v1/air-quality";
+const WONJU_POPULATION_URL = "https://www.wonju.go.kr/stat/selectBbsNttList.do?bbsNo=1229&integrDeptCode=&key=6313&pageUnit=40&searchCnd=all&searchCtgry=&searchKrwd=";
+const WONJU_HOME_URL = "https://www.wonju.go.kr/www/main.do";
 
 async function safeFetch(url: string, timeoutMs = 6500): Promise<Response> {
   const controller = new AbortController();
@@ -165,6 +167,54 @@ export function parseWonjuNotices(html: string): Notice[] {
   return dedupeNotices(items).slice(0, 8);
 }
 
+export function parsePopulationDetail(html: string): Omit<PopulationSnapshot, keyof import("./city.ts").ProviderStamp> {
+  const text = decodeHtml(html).replace(/,/g, "");
+  const period = text.match(/(20\d{2}년\s*\d{1,2}월말)\s*기준/)?.[1]?.replace(/\s+/g, " ") ?? null;
+  const households = text.match(/세대수\s*([0-9]+)세대/)?.[1];
+  const populationBlock = text.match(/인구수\s*([0-9]+)명[^남]*남\s*([0-9]+)[^여]*여\s*([0-9]+)/);
+  const householdChange = text.match(/세대수[^▶]*▶?\s*전월대비\s*([0-9]+)세대\s*(증가|감소)/);
+  const populationChange = text.match(/인구수[^▶]*▶?\s*전월대비\s*([0-9]+)명\s*(증가|감소)/);
+  const signed = (match: RegExpMatchArray | null) => match ? Number(match[1]) * (match[2] === "감소" ? -1 : 1) : null;
+  return {
+    period,
+    households: households ? Number(households) : null,
+    population: populationBlock ? Number(populationBlock[1]) : null,
+    male: populationBlock ? Number(populationBlock[2]) : null,
+    female: populationBlock ? Number(populationBlock[3]) : null,
+    householdChange: signed(householdChange),
+    populationChange: signed(populationChange),
+  };
+}
+
+export async function fetchPopulation(): Promise<PopulationSnapshot> {
+  try {
+    const listResponse = await safeFetch(WONJU_POPULATION_URL);
+    const listHtml = await listResponse.text();
+    const detailLink = [...listHtml.matchAll(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+      .map((match) => ({ href: match[1], title: decodeHtml(match[2]) }))
+      .find((item) => /20\d{2}년\s*\d{1,2}월말\s*기준\s*원주시\s*인구현황/.test(item.title));
+    if (!detailLink) throw new Error("최신 인구 게시물 링크를 찾지 못함");
+    const sourceUrl = new URL(detailLink.href.replace(/&amp;/g, "&"), WONJU_POPULATION_URL).toString();
+    const detailResponse = await safeFetch(sourceUrl);
+    const parsed = parsePopulationDetail(await detailResponse.text());
+    if (parsed.population === null || parsed.households === null) throw new Error("인구 상세 형식 변경 감지");
+    return { provider: "원주통계정보 월별인구현황", sourceUrl, status: "LIVE", fetchedAt: new Date().toISOString(), ...parsed };
+  } catch (error) {
+    return { provider: "원주통계정보 월별인구현황", sourceUrl: WONJU_POPULATION_URL, status: "UNAVAILABLE", fetchedAt: null, detail: error instanceof Error ? error.message : "provider failure", period: null, population: null, households: null, male: null, female: null, populationChange: null, householdChange: null };
+  }
+}
+
+export async function fetchMayor(): Promise<MayorSnapshot> {
+  try {
+    const response = await safeFetch(WONJU_HOME_URL);
+    const name = decodeHtml(await response.text()).match(/원주시장\s*([가-힣]{2,4})\s*입니다/)?.[1] ?? null;
+    if (!name) throw new Error("공식 시장 표기 형식 변경 감지");
+    return { provider: "원주시청", sourceUrl: WONJU_HOME_URL, status: "LIVE", fetchedAt: new Date().toISOString(), name };
+  } catch (error) {
+    return { provider: "원주시청", sourceUrl: WONJU_HOME_URL, status: "UNAVAILABLE", fetchedAt: null, detail: error instanceof Error ? error.message : "provider failure", name: null };
+  }
+}
+
 export async function fetchNotices() {
   try {
     const response = await safeFetch(WONJU_NEWS_URL);
@@ -204,6 +254,6 @@ export function alertUnavailable(): AlertSnapshot {
 }
 
 export async function getCitySnapshot(): Promise<CitySnapshot> {
-  const [weather, air, notices] = await Promise.all([fetchWeather(), fetchAir(), fetchNotices()]);
-  return { generatedAt: new Date().toISOString(), weather, air, notices, alerts: alertUnavailable() };
+  const [weather, air, notices, population, mayor] = await Promise.all([fetchWeather(), fetchAir(), fetchNotices(), fetchPopulation(), fetchMayor()]);
+  return { generatedAt: new Date().toISOString(), weather, air, notices, population, mayor, alerts: alertUnavailable() };
 }

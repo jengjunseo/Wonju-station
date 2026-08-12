@@ -43,12 +43,26 @@ export type AlertSnapshot = ProviderStamp & {
   issuedAt: string | null;
 };
 
+export type PopulationSnapshot = ProviderStamp & {
+  period: string | null;
+  population: number | null;
+  households: number | null;
+  male: number | null;
+  female: number | null;
+  populationChange: number | null;
+  householdChange: number | null;
+};
+
+export type MayorSnapshot = ProviderStamp & { name: string | null };
+
 export type CitySnapshot = {
   generatedAt: string;
   weather: WeatherSnapshot;
   air: AirSnapshot;
   alerts: AlertSnapshot;
   notices: { items: Notice[] } & ProviderStamp;
+  population: PopulationSnapshot;
+  mayor: MayorSnapshot;
 };
 
 export function freshnessFromAge(
@@ -112,4 +126,3 @@ export function dedupeNotices(items: Notice[]): Notice[] {
     return true;
   });
 }
-

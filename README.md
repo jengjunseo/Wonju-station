@@ -21,7 +21,11 @@ npm run dev
 | Alerts | KMA weather warnings | none | `CHECK`, never fake `NORMAL` |
 | Air | AirKorea | Open-Meteo Air Quality, clearly labelled | `UNAVAILABLE` |
 | Notices | Wonju City official notices | none | empty verified list |
+| Population | Wonju Statistics monthly population bulletin | none | current values omitted |
+| Mayor | Wonju City official homepage | none | current officeholder omitted |
 | Map | Kakao Maps when a public key is configured | OpenStreetMap embed | overlays omitted unless location is verified |
+
+Events, city history, historical people, discovery places, transport entry points, and `WONJU NEXT` currently use compact source-controlled records derived from linked official Wonju City pages. They are not presented as continuously live feeds.
 
 The server adapter lives in `lib/providers.ts`; presentation never fetches provider HTML directly. External records preserve provider, source URL, fetch time, and freshness state. Current provider requests use timeouts and the city endpoint is cached for five minutes with stale-while-revalidate.
 
@@ -41,4 +45,3 @@ Copy `.env.example` to `.env.local`. Keys are optional for rendering, but requir
 ## Deployment
 
 The app uses the bundled vinext + Cloudflare Worker-compatible Sites build. `.openai/hosting.json` is the deployment contract. Runtime values belong in Sites environment settings rather than source control.
-

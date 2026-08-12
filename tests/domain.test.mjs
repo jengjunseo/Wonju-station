@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { airGrade, alertLabel, dedupeNotices, freshnessFromAge, normalizeTitle, pulseScore } from "../lib/city.ts";
+import { parsePopulationDetail } from "../lib/providers.ts";
 
 test("maps explicit alert levels without opaque inference", () => {
   assert.equal(alertLabel(null), "CHECK");
@@ -39,3 +40,7 @@ test("pulse is bounded and unavailable only when both environment signals are ab
   assert.ok(score !== null && score >= 0 && score <= 100);
 });
 
+test("parses official monthly population facts without guessing missing fields", () => {
+  const parsed = parsePopulationDetail(`<h1>2026년 6월말 기준 원주시 인구현황</h1><p>- 세대수 178,100세대 ▶전월대비 100세대 증가</p><p>- 인구수 364,500명（남 180,500/ 여 184,000） ▶전월대비 200명 감소</p>`);
+  assert.deepEqual(parsed, { period: "2026년 6월말", households: 178100, population: 364500, male: 180500, female: 184000, householdChange: 100, populationChange: -200 });
+});
