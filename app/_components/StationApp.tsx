@@ -1,7 +1,8 @@
 "use client";
 
+/* eslint-disable @next/next/no-html-link-for-pages -- vinext production client navigation currently throws; document navigation is the reliable deployed path. */
+
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import type { CitySnapshot, Freshness } from "../../lib/city";
 import { pulseScore } from "../../lib/city";
 import "./station.css";
@@ -332,7 +333,7 @@ export function StationApp({ route }: { route: string }) {
 
     return (
       <PageShell eyebrow="EVENTS & CALENDAR" title="오늘 원주에서 무슨 일이 열리나" intro="날짜·장소·주최·공식 링크가 모두 확인된 행사만 표시합니다. 자동 수집을 가장하지 않고, 공식 행사 중 직접 검증한 일정과 원문을 제공합니다.">
-        <div className="date-strip">{eventDays.map((day, index) => <div className={index === 0 ? "active" : ""} key={`${day.date}-${day.label}`}><strong>{day.date}</strong><span>{day.label}</span></div>)}</div>
+        <div className="date-strip">{eventDays.map((day, index) => <div className={index === 0 ? "active" : ""} key={`${index}-${day.date}-${day.label}`}><strong>{day.date}</strong><span>{day.label}</span></div>)}</div>
         <div className="event-list">{VERIFIED_EVENTS.map((event, index) => <a href={event.source} target="_blank" rel="noreferrer" key={event.title}><span>{String(index + 1).padStart(2, "0")}</span><time>{event.date}<small>{event.time}</small></time><div><small>{event.place}</small><h2>{event.title}</h2></div><b>VERIFIED ↗</b></a>)}</div>
         <div className="link-cards"><a href="https://www.wonju.go.kr/www/sub.do?key=213" target="_blank" rel="noreferrer"><span>01</span><strong>원주시 문화행사</strong><small>공식 일정 열기 ↗</small></a><a href="https://www.wonju.go.kr/tour/index.do" target="_blank" rel="noreferrer"><span>02</span><strong>원주관광</strong><small>공식 관광 정보 ↗</small></a></div>
       </PageShell>
@@ -383,8 +384,8 @@ export function StationApp({ route }: { route: string }) {
   return (
     <div className="station-shell">
       <header className="topbar">
-        <Link className="brand" href="/"><span className="brand-mark"><i /><i /><i /></span><span><strong>WONJU STATION</strong><small>원주의 모든 것, 지금 여기.</small></span></Link>
-        <nav aria-label="주요 메뉴">{NAV.map(([href, label]) => <Link className={(href === "/" ? routeKey === "now" : route.startsWith(href)) ? "active" : ""} href={href} key={href}>{label}</Link>)}</nav>
+        <a className="brand" href="/"><span className="brand-mark"><i /><i /><i /></span><span><strong>WONJU STATION</strong><small>원주의 모든 것, 지금 여기.</small></span></a>
+        <nav aria-label="주요 메뉴">{NAV.map(([href, label]) => <a className={(href === "/" ? routeKey === "now" : route.startsWith(href)) ? "active" : ""} href={href} key={href}>{label}</a>)}</nav>
         <div className="header-actions"><button onClick={() => setQuery(query ? "" : "원주")} aria-label="검색 열기">⌕</button><button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="색상 모드 전환">{theme === "dark" ? "☼" : "◐"}</button><span className={`network-state network-state--${snapshot.weather.status.toLowerCase()}`}>{snapshot.weather.status === "UNAVAILABLE" ? "PARTIAL" : "ONLINE"}</span></div>
       </header>
 
@@ -392,7 +393,7 @@ export function StationApp({ route }: { route: string }) {
         <label htmlFor="station-search">통합 검색</label>
         <input id="station-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="동네, 뉴스, 섹션 검색" autoComplete="off" />
         <button onClick={() => setQuery("")} aria-label="검색 닫기">×</button>
-        {query ? <div className="search-results">{searchResults.length ? searchResults.map((item) => item.href.startsWith("/") ? <Link href={item.href} key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></Link> : <a href={item.href} target="_blank" rel="noreferrer" key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></a>) : <p>일치하는 결과가 없습니다.</p>}</div> : null}
+        {query ? <div className="search-results">{searchResults.length ? searchResults.map((item) => item.href.startsWith("/") ? <a href={item.href} key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></a> : <a href={item.href} target="_blank" rel="noreferrer" key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></a>) : <p>일치하는 결과가 없습니다.</p>}</div> : null}
       </div>
 
       <div className="route-rail"><span>{routeKey.toUpperCase()}</span><span>DATA FIRST · SOURCE VISIBLE · FAIL CLOSED</span></div>
@@ -402,8 +403,8 @@ export function StationApp({ route }: { route: string }) {
       </main>
       <footer>
         <div className="footer-brand"><strong>WONJU STATION</strong><span>도시를 한눈에, 동네를 더 가까이.</span></div>
-        <div><span>DATA POLICY</span><Link href="/city">출처와 최신성</Link><Link href="/map">위치 신뢰도</Link></div>
-        <div><span>EXPLORE</span><Link href="/weather">날씨</Link><Link href="/news">뉴스</Link><Link href="/history">아카이브</Link></div>
+        <div><span>DATA POLICY</span><a href="/city">출처와 최신성</a><a href="/map">위치 신뢰도</a></div>
+        <div><span>EXPLORE</span><a href="/weather">날씨</a><a href="/news">뉴스</a><a href="/history">아카이브</a></div>
         <div className="footer-status"><span className="live-dot" /> SYSTEM {snapshot.weather.status === "UNAVAILABLE" ? "PARTIAL" : "OPERATIONAL"}<small>© {now?.getFullYear() ?? 2026} WONJU STATION</small></div>
       </footer>
     </div>
