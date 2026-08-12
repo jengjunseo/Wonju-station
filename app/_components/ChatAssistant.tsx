@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 
 type ChatSource = { label: string; url: string; fetchedAt: string | null };
-type Message = { role: "user" | "assistant"; text: string; sources?: ChatSource[]; mode?: string };
+type ChatPlace = { id: string; name: string; category: string | null; address: string | null; roadAddress: string | null; phone: string | null; latitude: number; longitude: number; placeUrl: string; distance: number | null };
+type Message = { role: "user" | "assistant"; text: string; sources?: ChatSource[]; places?: ChatPlace[]; mode?: string };
 
 const FIRST_GREETING = "안녕하세요🔥🔥 치악산에서 날아온 꿩 꽁드리입니다! 원주에 대해 궁금한 게 있으면 무엇이든 말씀해주세요! 아니면 저랑 재밌는 이야기라도 하실래요? ✨✨";
 
@@ -50,9 +51,9 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: clean, history: messages.slice(-4).map(({ role, text }) => ({ role, text })) }),
       });
-      const data = await response.json() as { available?: boolean; message?: string; sources?: ChatSource[]; mode?: string };
+      const data = await response.json() as { available?: boolean; message?: string; sources?: ChatSource[]; places?: ChatPlace[]; mode?: string };
       if (!response.ok && response.status === 503 && data.available === false) setAvailable(false);
-      setMessages((current) => [...current, { role: "assistant", text: data.message ?? "답변을 확인하지 못했어요.", sources: data.sources, mode: data.mode }]);
+      setMessages((current) => [...current, { role: "assistant", text: data.message ?? "답변을 확인하지 못했어요.", sources: data.sources, places: data.places, mode: data.mode }]);
     } catch {
       setMessages((current) => [...current, { role: "assistant", text: "AI 챗봇은 아직 사용할 수 없습니다." }]);
     } finally {
@@ -73,7 +74,8 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
         ) : (
           <div className="chat-message chat-message--assistant" key={`${message.role}-${index}`}>
             {message.text}
-            {message.sources?.length ? <small><br />{message.mode === "WONJU_WEB" ? "웹 검색 근거" : "WONJU STATION 근거"}<br />{message.sources.map((item, sourceIndex) => {
+            {message.places?.length ? <div>{message.places.map((place) => <div key={place.id}><br /><strong>{place.name}</strong><br /><small>{place.category ?? "카카오 장소"}<br />{place.roadAddress ?? place.address}{place.phone ? <><br />{place.phone}</> : null}<br /><a href={place.placeUrl} target="_blank" rel="noreferrer">카카오맵에서 보기 ↗</a></small></div>)}</div> : null}
+            {message.sources?.length ? <small><br />{message.mode === "WONJU_WEB" ? "웹 검색 근거" : message.mode === "WONJU_PLACE" ? "카카오 장소 검색" : "WONJU STATION 근거"}<br />{message.sources.map((item, sourceIndex) => {
               const checkedAt = sourceTime(item.fetchedAt);
               return <span key={`${item.url}-${sourceIndex}`}><a href={item.url} target="_blank" rel="noreferrer">{item.label}</a>{checkedAt ? ` · ${checkedAt}` : ""}{sourceIndex < (message.sources?.length ?? 0) - 1 ? <br /> : null}</span>;
             })}</small> : null}

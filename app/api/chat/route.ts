@@ -5,18 +5,18 @@ import {
   CHAT_SEARCH_UNAVAILABLE_MESSAGE,
   CHAT_UNAVAILABLE_MESSAGE,
   CHAT_UNSUPPORTED_MESSAGE,
-  chatReply,
   checkGeminiModel,
   GEMINI_MODEL,
   GeminiRequestError,
   isAmbiguousWonjuQuestion,
+  modelForMode,
   outOfScopeReply,
   routeChatQuestion,
   selectGroundedContext,
   validateChatInput,
   type ChatTurn,
 } from "../../../lib/chat";
-import { getCitySnapshot } from "../../../lib/providers";
+import { getCitySnapshot, searchWonjuPlaces } from "../../../lib/providers";
 
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT = 5;
@@ -52,7 +52,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const key = apiKey();
-  if (!key) return Response.json({ available: false, message: CHAT_UNAVAILABLE_MESSAGE }, { status: 503, headers: { "Cache-Control": "no-store" } });
   if (rateLimited(request)) return Response.json({ available: true, message: "잠시 후 다시 질문해 주세요." }, { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } });
   let body: { question?: unknown; history?: unknown };
   try { body = await request.json() as typeof body; } catch { return Response.json({ available: true, message: "질문 형식을 확인해 주세요." }, { status: 400 }); }
@@ -72,10 +71,28 @@ export async function POST(request: Request) {
   if (mode === "CHAT" && isAmbiguousWonjuQuestion(question)) {
     return Response.json({ available: true, mode, searchUsed: false, message: ambiguousWonjuReply(), sources: [] }, { headers: { "Cache-Control": "no-store" } });
   }
-  if (mode === "CHAT") {
-    return Response.json({ available: true, mode, searchUsed: false, message: chatReply(question), sources: [] }, { headers: { "Cache-Control": "no-store" } });
+  if (mode === "WONJU_PLACE") {
+    const result = await searchWonjuPlaces(question);
+    const message = result.status === "UNAVAILABLE"
+      ? "지금 카카오 장소 검색을 확인할 수 없어요. 잠시 뒤 다시 찾아볼래? 🐦"
+      : result.places.length
+        ? `카카오 장소 검색에서 원주로 확인되는 곳 ${result.places.length}군데 가져왔어요~ 🐦`
+        : "카카오 장소 검색에서 조건에 맞는 원주 장소를 찾지 못했어요~ 🐦";
+    return Response.json({
+      available: true,
+      mode,
+      searchUsed: false,
+      message,
+      places: result.places,
+      sources: result.status === "LIVE" ? [{ label: result.provider, url: result.sourceUrl, fetchedAt: result.fetchedAt }] : [],
+      provider: { name: result.provider, status: result.status, detail: result.detail },
+    }, { headers: { "Cache-Control": "no-store" } });
   }
-  if (!await checkGeminiModel(key)) return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  if (!key) return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  if (!await checkGeminiModel(key, modelForMode(mode))) {
+    const message = mode === "WONJU_WEB" ? CHAT_SEARCH_UNAVAILABLE_MESSAGE : CHAT_UNAVAILABLE_MESSAGE;
+    return Response.json({ available: mode === "WONJU_WEB", mode, searchUsed: false, message, sources: [], provider: { name: modelForMode(mode), status: "UNAVAILABLE" } }, { status: mode === "WONJU_WEB" ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+  }
 
   const context = mode === "STATION" ? selectGroundedContext(question, await getCitySnapshot()) : null;
   if (mode === "STATION" && !context) {
@@ -87,9 +104,8 @@ export async function POST(request: Request) {
     return Response.json({ available: true, mode, searchUsed: answer.searchUsed, message: answer.message, sources }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const providerStatus = error instanceof GeminiRequestError ? error.status : null;
-    console.error("Chat request failed", mode, providerStatus ?? "UNKNOWN");
     if (mode === "WONJU_WEB" && providerStatus === 429) {
-      return Response.json({ available: true, mode, searchUsed: false, message: CHAT_SEARCH_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
+      return Response.json({ available: true, mode, searchUsed: false, message: CHAT_SEARCH_UNAVAILABLE_MESSAGE, sources: [], provider: { name: "Google Search grounding", status: "QUOTA_EXHAUSTED", code: 429 } }, { headers: { "Cache-Control": "no-store" } });
     }
     return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }

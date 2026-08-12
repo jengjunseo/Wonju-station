@@ -2,14 +2,15 @@ import { WONJU_DISTRICTS, type CitySnapshot, type Notice } from "./city.ts";
 import { HISTORICAL_PEOPLE, HISTORY_TIMELINE, VERIFIED_EVENTS } from "./content.ts";
 
 export const GEMINI_MODEL = "gemini-3.5-flash-lite";
+export const GEMINI_WEB_MODEL = "gemini-2.5-flash-lite";
 export const CHAT_UNAVAILABLE_MESSAGE = "AI 챗봇은 아직 사용할 수 없습니다.";
 export const CHAT_UNSUPPORTED_MESSAGE = "꽁드리가 확인한 WONJU STATION 정보에는 아직 답할 근거가 없어요~ 🐦";
-export const CHAT_SEARCH_UNAVAILABLE_MESSAGE = "꽁드리의 웹 검색 사용량 한도를 확인해야 해서 지금은 답할 수 없어요~ 🐦";
+export const CHAT_SEARCH_UNAVAILABLE_MESSAGE = "앗, 제가 웹을 찾아보는 횟수를 오늘 다 써버렸나 봐요 😅 원주 날씨나 뉴스처럼 STATION이 직접 확인하는 정보는 계속 알려드릴 수 있어요!";
 export const CHAT_INPUT_LIMIT = 300;
 export const CHAT_HISTORY_LIMIT = 4;
 
-export type ChatMode = "STATION" | "WONJU_WEB" | "CHAT" | "OUT_OF_SCOPE";
-export type GeminiMode = Exclude<ChatMode, "OUT_OF_SCOPE">;
+export type ChatMode = "STATION" | "WONJU_PLACE" | "WONJU_WEB" | "CHAT" | "OUT_OF_SCOPE";
+export type GeminiMode = Exclude<ChatMode, "OUT_OF_SCOPE" | "WONJU_PLACE">;
 export type ChatTurn = { role: "user" | "assistant"; text: string };
 export type ChatSource = { label: string; url: string; fetchedAt: string | null };
 export type GroundedContext = {
@@ -36,14 +37,15 @@ const topicRules: Array<[string, RegExp]> = [
   ["population", /인구|가구|세대|남성|여성/],
   ["administration", /원주시장|시장님|시장(?:은|이|누구|정보)|행정|시청/],
   ["events", /행사|이벤트|공연|전시|축제|이번 주/],
-  ["history", /역사|연혁|역사 인물|박경리|임윤지당|최규하|북원소경|강원감영|조엄|장일순/],
-  ["district", new RegExp(["읍면동", ...WONJU_DISTRICTS].join("|"))],
+  ["history", /역사(?!박물관)|연혁|역사 인물|박경리|임윤지당|최규하|북원소경|강원감영|조엄|장일순/],
+  ["district", new RegExp(`(?:${["읍면동", ...WONJU_DISTRICTS].join("|")}).*(?:소식|뉴스|현황|통계|정보)|(?:소식|뉴스|현황|통계|정보).*(?:${["읍면동", ...WONJU_DISTRICTS].join("|")})`)],
 ];
 
 const unsafePattern = /사귄|열애|불륜|루머|소문|카더라|뒷담|사생활|집 주소|전화번호|연락처|개인정보|폭로|의혹|혐의|논란/;
 const otherRegionPattern = /서울|부산|대구|인천|광주|대전|울산|세종|제주|춘천|강릉|속초|동해|삼척|태백|횡성|홍천|평창|수원|성남|용인|여주|충주|제천/;
-const chatPattern = /^(?:안녕|안녕하세요|반가워|고마워|감사해|잘 자|잘 있어)|심심|뭐해|무엇을 하고|재밌는 이야기|농담|너 누구|꽁드리|잘 지내/;
-const webPattern = /맛집|식당|음식|카페|디저트|관광|여행|명소|볼거리|먹거리|문화|지리|산책|데이트|유명인|연예인|출신|트리비아|이야깃거리/;
+const chatPattern = /^(?:안녕|안녕하세요|반가워|고마워|감사해|잘 자|잘 있어)|심심|뭐해|무엇을 하고|재밌는 (?:이야기|얘기)|농담|너 누구|꽁드리|잘 지내/;
+const placePattern = /맛집|식당|음식점|카페|커피|디저트|빵집|베이커리|고기|밥 먹|먹을 곳|가게|매장|상점|박물관|미술관|도서관|병원|약국|공원|숙소|호텔|관광지|명소|볼거리|장소.*찾|찾아줘/;
+const webPattern = /문화|지리|유명인|연예인|출신|트리비아|잡학|유래|관련.*(?:이야기|이유)|이야깃거리/;
 
 export function isAmbiguousWonjuQuestion(question: string): boolean {
   return /^원주(?:는)?\s*(?:어때|어떠니|어떤 곳이야)[?!.~]*$/.test(question.trim());
@@ -55,8 +57,10 @@ export function routeChatQuestion(question: string): ChatMode {
   if (otherRegionPattern.test(normalized) && !normalized.includes("원주")) return "OUT_OF_SCOPE";
   if (topicRules.some(([, pattern]) => pattern.test(normalized))) return "STATION";
   if (isAmbiguousWonjuQuestion(normalized)) return "CHAT";
+  if (placePattern.test(normalized)) return "WONJU_PLACE";
+  if ((normalized.includes("원주") || normalized.includes("치악산")) && webPattern.test(normalized)) return "WONJU_WEB";
   if (chatPattern.test(normalized)) return "CHAT";
-  if (normalized.includes("원주") || normalized.includes("치악산") || webPattern.test(normalized)) return "WONJU_WEB";
+  if (normalized.includes("원주") || normalized.includes("치악산")) return "WONJU_WEB";
   return "OUT_OF_SCOPE";
 }
 
@@ -233,6 +237,10 @@ export function buildGeminiRequest(question: string, context: GroundedContext | 
   };
 }
 
+export function modelForMode(mode: GeminiMode): string {
+  return mode === "WONJU_WEB" ? GEMINI_WEB_MODEL : GEMINI_MODEL;
+}
+
 export function extractGeminiText(data: unknown): string | null {
   const parts = (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })?.candidates?.[0]?.content?.parts;
   if (!Array.isArray(parts)) return null;
@@ -270,24 +278,25 @@ export class GeminiRequestError extends Error {
   }
 }
 
-let modelCheckCache: { available: boolean; expiresAt: number } | null = null;
+const modelCheckCache = new Map<string, { available: boolean; expiresAt: number }>();
 
-export async function checkGeminiModel(apiKey: string): Promise<boolean> {
-  if (modelCheckCache && modelCheckCache.expiresAt > Date.now()) return modelCheckCache.available;
+export async function checkGeminiModel(apiKey: string, model = GEMINI_MODEL): Promise<boolean> {
+  const cached = modelCheckCache.get(model);
+  if (cached && cached.expiresAt > Date.now()) return cached.available;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 6_000);
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}`, {
       signal: controller.signal,
       headers: { Accept: "application/json", "x-goog-api-key": apiKey },
     });
     if (!response.ok) return false;
     const data = await response.json() as { name?: string; supportedGenerationMethods?: string[] };
-    const available = data.name === `models/${GEMINI_MODEL}` && Array.isArray(data.supportedGenerationMethods) && data.supportedGenerationMethods.includes("generateContent");
-    modelCheckCache = { available, expiresAt: Date.now() + 10 * 60_000 };
+    const available = data.name === `models/${model}` && Array.isArray(data.supportedGenerationMethods) && data.supportedGenerationMethods.includes("generateContent");
+    modelCheckCache.set(model, { available, expiresAt: Date.now() + 10 * 60_000 });
     return available;
   } catch {
-    modelCheckCache = { available: false, expiresAt: Date.now() + 60_000 };
+    modelCheckCache.set(model, { available: false, expiresAt: Date.now() + 60_000 });
     return false;
   } finally {
     clearTimeout(timeout);
@@ -298,7 +307,7 @@ export async function askGemini(question: string, context: GroundedContext | nul
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelForMode(mode)}:generateContent`, {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },

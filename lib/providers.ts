@@ -15,6 +15,31 @@ const AIRKOREA_SOURCE_URL = "https://www.data.go.kr/data/15073861/openapi.do";
 const NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json";
 const NAVER_NEWS_SOURCE_URL = "https://developers.naver.com/docs/serviceapi/search/news/news.md";
 const KAKAO_ADDRESS_URL = "https://dapi.kakao.com/v2/local/search/address.json";
+const KAKAO_KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
+export const KAKAO_LOCAL_SOURCE_URL = "https://developers.kakao.com/docs/ko/local/dev-guide#search-by-keyword";
+
+export type WonjuPlace = {
+  id: string;
+  name: string;
+  category: string | null;
+  address: string | null;
+  roadAddress: string | null;
+  phone: string | null;
+  latitude: number;
+  longitude: number;
+  placeUrl: string;
+  distance: number | null;
+};
+
+export type WonjuPlaceSearch = {
+  provider: "Kakao Local";
+  sourceUrl: string;
+  status: "LIVE" | "UNAVAILABLE";
+  fetchedAt: string | null;
+  query: string;
+  places: WonjuPlace[];
+  detail: string;
+};
 
 function envValue(name: string): string | null {
   const value = typeof process !== "undefined" ? process.env[name]?.trim() : undefined;
@@ -23,6 +48,99 @@ function envValue(name: string): string | null {
 
 function publicDataKey(specificName: string): string | null {
   return envValue(specificName) ?? envValue("PUBLIC_DATA_SERVICE_KEY");
+}
+
+export function buildWonjuPlaceQuery(question: string): string {
+  const intent = question
+    .replace(/[?!.,~]+/g, " ")
+    .replace(/원주시?(?:에서|의|에|로|근처)?/g, " ")
+    .replace(/(?:추천해|알려|찾아)(?:줘|주세요|줄래|볼래)?/g, " ")
+    .replace(/갈\s*만한/g, " ")
+    .replace(/([가-힣]+(?:읍|면|동))에서/g, "$1 ")
+    .replace(/먹을\s*곳(?:이)?\s*있어/g, "음식점")
+    .replace(/밥\s*음식점/g, "음식점")
+    .replace(/있어|어디야|어디\s*있어/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `원주시 ${intent || "장소"}`.slice(0, 80);
+}
+
+type KakaoPlaceDocument = {
+  id?: unknown;
+  place_name?: unknown;
+  category_name?: unknown;
+  address_name?: unknown;
+  road_address_name?: unknown;
+  phone?: unknown;
+  x?: unknown;
+  y?: unknown;
+  place_url?: unknown;
+  distance?: unknown;
+};
+
+export function normalizeKakaoPlaces(data: unknown): WonjuPlace[] {
+  const documents = (data as { documents?: KakaoPlaceDocument[] })?.documents;
+  if (!Array.isArray(documents)) return [];
+  return documents.flatMap((document): WonjuPlace[] => {
+    const id = typeof document.id === "string" ? document.id.trim() : "";
+    const name = typeof document.place_name === "string" ? document.place_name.replace(/\s+/g, " ").trim() : "";
+    const address = typeof document.address_name === "string" && document.address_name.trim() ? document.address_name.replace(/\s+/g, " ").trim() : null;
+    const roadAddress = typeof document.road_address_name === "string" && document.road_address_name.trim() ? document.road_address_name.replace(/\s+/g, " ").trim() : null;
+    const latitude = finiteNumber(document.y);
+    const longitude = finiteNumber(document.x);
+    const placeUrl = typeof document.place_url === "string" ? document.place_url.trim() : "";
+    const isWonju = [address, roadAddress].some((value) => value?.includes("원주"));
+    if (!id || !name || !isWonju || latitude === null || longitude === null || !/^https?:\/\/place\.map\.kakao\.com\/\d+\/?$/i.test(placeUrl)) return [];
+    return [{
+      id,
+      name: name.slice(0, 100),
+      category: typeof document.category_name === "string" && document.category_name.trim() ? document.category_name.replace(/\s+/g, " ").trim().slice(0, 160) : null,
+      address,
+      roadAddress,
+      phone: typeof document.phone === "string" && document.phone.trim() ? document.phone.trim().slice(0, 40) : null,
+      latitude,
+      longitude,
+      placeUrl,
+      distance: finiteNumber(document.distance),
+    }];
+  }).filter((place, index, all) => all.findIndex((candidate) => candidate.id === place.id) === index).slice(0, 6);
+}
+
+const wonjuPlaceCache = new Map<string, { value: WonjuPlaceSearch; expiresAt: number }>();
+
+export async function searchWonjuPlaces(question: string, kakaoKey = envValue("KAKAO_REST_API_KEY")): Promise<WonjuPlaceSearch> {
+  const query = buildWonjuPlaceQuery(question);
+  const unavailable = (detail: string): WonjuPlaceSearch => ({ provider: "Kakao Local", sourceUrl: KAKAO_LOCAL_SOURCE_URL, status: "UNAVAILABLE", fetchedAt: null, query, places: [], detail });
+  if (!kakaoKey) return unavailable("KAKAO_REST_API_KEY 미구성");
+  const cached = wonjuPlaceCache.get(query);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  try {
+    const params = new URLSearchParams({
+      query,
+      x: String(WONJU.longitude),
+      y: String(WONJU.latitude),
+      radius: "20000",
+      size: "8",
+      sort: "accuracy",
+    });
+    const response = await safeFetch(`${KAKAO_KEYWORD_URL}?${params}`, 4500, { headers: { Authorization: `KakaoAK ${kakaoKey}` } });
+    const places = normalizeKakaoPlaces(await response.json());
+    const value: WonjuPlaceSearch = {
+      provider: "Kakao Local",
+      sourceUrl: KAKAO_LOCAL_SOURCE_URL,
+      status: "LIVE",
+      fetchedAt: new Date().toISOString(),
+      query,
+      places,
+      detail: places.length ? `원주 중심 20km · 주소 원주 검증 · ${places.length}건` : "검색 결과 없음",
+    };
+    wonjuPlaceCache.set(query, { value, expiresAt: Date.now() + 5 * 60_000 });
+    return value;
+  } catch (error) {
+    const value = unavailable(error instanceof Error ? error.message : "provider failure");
+    wonjuPlaceCache.set(query, { value, expiresAt: Date.now() + 60_000 });
+    return value;
+  }
 }
 
 async function safeFetch(url: string, timeoutMs = 6500, init: RequestInit = {}): Promise<Response> {
