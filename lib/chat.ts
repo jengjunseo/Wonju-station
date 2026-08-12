@@ -1,7 +1,7 @@
 import { WONJU_DISTRICTS, type CitySnapshot, type Notice } from "./city.ts";
 import { HISTORICAL_PEOPLE, HISTORY_TIMELINE, VERIFIED_EVENTS } from "./content.ts";
 
-export const GEMINI_MODEL = "gemini-3.6-flash-lite";
+export const GEMINI_MODEL = "gemini-3.5-flash-lite";
 export const CHAT_UNAVAILABLE_MESSAGE = "AI 챗봇을 아직 사용할 수 없습니다.";
 export const CHAT_UNSUPPORTED_MESSAGE = "현재 WONJU STATION이 확인한 정보만으로는 답하기 어렵습니다.";
 export const CHAT_INPUT_LIMIT = 300;

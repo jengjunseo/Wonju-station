@@ -18,7 +18,7 @@ WONJU STATION is a responsive Wonju regional-life dashboard. It shows sourced we
 | OpenStreetMap | Base map fallback | LIVE / FALLBACK | — | Remains available until Kakao Maps succeeds. |
 | Kakao Local REST API | Evidence-backed News Map geocoding | PENDING_CREDENTIAL | `KAKAO_REST_API_KEY` | Only explicit Wonju 읍면동 evidence is geocoded; results are labelled approximate. |
 | Kakao Maps JavaScript SDK | Base map | PENDING_CREDENTIAL | `NEXT_PUBLIC_KAKAO_MAP_KEY` | Provider-designated public key. Register `https://wonju-station-live.tsiba5021.chatgpt.site` as an allowed web domain. |
-| Gemini API | Grounded Wonju assistant | UNAVAILABLE | `GEMINI_API_KEY` | Adapter targets requested `gemini-3.6-flash-lite`. Google did not publish that model/API ID as of 2026-08-12, so no substitute is used. |
+| Gemini API | Grounded Wonju assistant | PENDING_CREDENTIAL | `GEMINI_API_KEY` | Adapter targets Google's stable `gemini-3.5-flash-lite` model. |
 | Wonju statistics / city site | Population and city attribution | LIVE | — | Local certification returned a 2026년 7월말 population period and live city metadata. |
 
 `PUBLIC_DATA_SERVICE_KEY` remains an optional shared server-secret fallback for KMA and AirKorea.
@@ -31,13 +31,13 @@ WONJU STATION is a responsive Wonju regional-life dashboard. It shows sourced we
 
 - Current credential-free News Map coverage is **0 / 8 eligible clusters (0%)**. This is honest partial coverage: no current official title named an 읍면동 and Kakao geocoding is not configured.
 - Naver, KMA, AirKorea and Kakao live-provider certification awaits owner credentials/provider-console setup.
-- Gemini live certification is blocked by the requested model not existing in the official API, in addition to the missing key.
+- Gemini live certification depends on a working `GEMINI_API_KEY` in the deployed runtime.
 - Rate limiting is bounded per runtime instance, not distributed, because the MVP intentionally has no persistence service.
 - The deployed v1.1 build remains owner-only. Sites rejected the autonomous persistent access-policy change and requires fresh owner confirmation before public access can be enabled.
 
 ## Human next action
 
-In Sites sharing, change access to **Public** (or explicitly approve that access change when requested). Add the credential values listed above, register the Sites URL in Kakao Developers, then redeploy. For Gemini, wait until Google exposes the requested `gemini-3.6-flash-lite` model identifier; no source edit is required if it appears under that ID.
+In Sites sharing, change access to **Public** (or explicitly approve that access change when requested). Add the credential values listed above, register the Sites URL in Kakao Developers, then redeploy.
 
 ## Deployment
 

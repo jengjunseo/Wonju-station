@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { airGrade, alertLabel, dedupeNotices, extractDistrictEvidence, freshnessFromAge, newsCoverage, normalizeTitle, noticesAreSameStory, pulseScore } from "../lib/city.ts";
 import { fetchNaverNews, latLonToKmaGrid, normalizeNaverItems, parsePopulationDetail } from "../lib/providers.ts";
-import { CHAT_UNSUPPORTED_MESSAGE, buildGroundedPrompt, selectGroundedContext, validateChatInput } from "../lib/chat.ts";
+import { CHAT_UNSUPPORTED_MESSAGE, GEMINI_MODEL, buildGroundedPrompt, selectGroundedContext, validateChatInput } from "../lib/chat.ts";
+
+test("pins the grounded chatbot to the current stable Flash-Lite model", () => {
+  assert.equal(GEMINI_MODEL, "gemini-3.5-flash-lite");
+});
 
 test("maps explicit alert levels without opaque inference", () => {
   assert.equal(alertLabel(null), "CHECK");
