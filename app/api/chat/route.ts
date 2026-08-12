@@ -79,7 +79,8 @@ export async function POST(request: Request) {
     const answer = await askGemini(question, context, history, key, mode);
     const sources = mode === "STATION" ? context?.sources ?? [] : answer.sources;
     return Response.json({ available: true, mode, searchUsed: answer.searchUsed, message: answer.message, sources }, { headers: { "Cache-Control": "no-store" } });
-  } catch {
+  } catch (error) {
+    console.error("Chat request failed", error instanceof Error ? error.message : "Unknown error");
     return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }

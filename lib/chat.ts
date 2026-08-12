@@ -286,7 +286,10 @@ export async function askGemini(question: string, context: GroundedContext | nul
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify(buildGeminiRequest(question, context, history, mode)),
     });
-    if (!response.ok) throw new Error(`Gemini model unavailable (${response.status})`);
+    if (!response.ok) {
+      const detail = (await response.text()).replace(/\s+/g, " ").slice(0, 500);
+      throw new Error(`Gemini generateContent failed (${response.status}): ${detail}`);
+    }
     const data = await response.json();
     const rawText = extractGeminiText(data);
     const message = rawText ? stripModelProvenance(rawText) : null;
