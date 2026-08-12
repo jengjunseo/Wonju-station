@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { airGrade, alertLabel, dedupeNotices, extractDistrictEvidence, freshnessFromAge, newsCoverage, normalizeTitle, noticesAreSameStory, pulseScore } from "../lib/city.ts";
 import { fetchNaverNews, latLonToKmaGrid, normalizeNaverItems, parsePopulationDetail } from "../lib/providers.ts";
-import { CHAT_UNSUPPORTED_MESSAGE, GEMINI_MODEL, buildGeminiRequest, buildGroundedPrompt, extractGroundingSources, routeChatQuestion, selectGroundedContext, stripModelProvenance, validateChatInput } from "../lib/chat.ts";
+import { CHAT_UNSUPPORTED_MESSAGE, GEMINI_MODEL, buildGeminiRequest, buildGroundedPrompt, chatReply, extractGroundingSources, routeChatQuestion, selectGroundedContext, stripModelProvenance, validateChatInput } from "../lib/chat.ts";
 
 const EMPTY_CHAT_CONTEXT = { generatedAt: "2026-08-12T00:00:00.000Z", topics: [], facts: {}, sources: [] };
 
@@ -150,6 +150,8 @@ test("adds Google Search only to Wonju web requests", () => {
   const web = buildGeminiRequest("원주 카페 알려줘", null, [], "WONJU_WEB");
   assert.deepEqual(web.tools, [{ google_search: {} }]);
   assert.equal("tools" in buildGeminiRequest("안녕", null, [], "CHAT"), false);
+  assert.match(chatReply("심심해, 재밌는 이야기 해줘"), /상상 놀이/);
+  assert.doesNotMatch(chatReply("심심해, 재밌는 이야기 해줘"), /날씨|기온|현재/);
 });
 
 test("extracts web provenance structurally and removes model-authored provenance", () => {

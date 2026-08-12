@@ -2,10 +2,13 @@ import {
   ambiguousWonjuReply,
   askGemini,
   CHAT_HISTORY_LIMIT,
+  CHAT_SEARCH_UNAVAILABLE_MESSAGE,
   CHAT_UNAVAILABLE_MESSAGE,
   CHAT_UNSUPPORTED_MESSAGE,
+  chatReply,
   checkGeminiModel,
   GEMINI_MODEL,
+  GeminiRequestError,
   isAmbiguousWonjuQuestion,
   outOfScopeReply,
   routeChatQuestion,
@@ -69,6 +72,9 @@ export async function POST(request: Request) {
   if (mode === "CHAT" && isAmbiguousWonjuQuestion(question)) {
     return Response.json({ available: true, mode, searchUsed: false, message: ambiguousWonjuReply(), sources: [] }, { headers: { "Cache-Control": "no-store" } });
   }
+  if (mode === "CHAT") {
+    return Response.json({ available: true, mode, searchUsed: false, message: chatReply(question), sources: [] }, { headers: { "Cache-Control": "no-store" } });
+  }
   if (!await checkGeminiModel(key)) return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
 
   const context = mode === "STATION" ? selectGroundedContext(question, await getCitySnapshot()) : null;
@@ -80,7 +86,11 @@ export async function POST(request: Request) {
     const sources = mode === "STATION" ? context?.sources ?? [] : answer.sources;
     return Response.json({ available: true, mode, searchUsed: answer.searchUsed, message: answer.message, sources }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    console.error("Chat request failed", error instanceof Error ? error.message : "Unknown error");
+    const providerStatus = error instanceof GeminiRequestError ? error.status : null;
+    console.error("Chat request failed", mode, providerStatus ?? "UNKNOWN");
+    if (mode === "WONJU_WEB" && providerStatus === 429) {
+      return Response.json({ available: true, mode, searchUsed: false, message: CHAT_SEARCH_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    }
     return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 }

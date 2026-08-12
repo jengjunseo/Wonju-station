@@ -51,7 +51,7 @@ export default function ChatAssistant({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({ question: clean, history: messages.slice(-4).map(({ role, text }) => ({ role, text })) }),
       });
       const data = await response.json() as { available?: boolean; message?: string; sources?: ChatSource[]; mode?: string };
-      if (!response.ok && response.status === 503) setAvailable(false);
+      if (!response.ok && response.status === 503 && data.available === false) setAvailable(false);
       setMessages((current) => [...current, { role: "assistant", text: data.message ?? "답변을 확인하지 못했어요.", sources: data.sources, mode: data.mode }]);
     } catch {
       setMessages((current) => [...current, { role: "assistant", text: "AI 챗봇은 아직 사용할 수 없습니다." }]);

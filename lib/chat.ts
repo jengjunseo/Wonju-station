@@ -4,6 +4,7 @@ import { HISTORICAL_PEOPLE, HISTORY_TIMELINE, VERIFIED_EVENTS } from "./content.
 export const GEMINI_MODEL = "gemini-3.5-flash-lite";
 export const CHAT_UNAVAILABLE_MESSAGE = "AI 챗봇은 아직 사용할 수 없습니다.";
 export const CHAT_UNSUPPORTED_MESSAGE = "꽁드리가 확인한 WONJU STATION 정보에는 아직 답할 근거가 없어요~ 🐦";
+export const CHAT_SEARCH_UNAVAILABLE_MESSAGE = "꽁드리의 웹 검색 사용량 한도를 확인해야 해서 지금은 답할 수 없어요~ 🐦";
 export const CHAT_INPUT_LIMIT = 300;
 export const CHAT_HISTORY_LIMIT = 4;
 
@@ -67,6 +68,14 @@ export function outOfScopeReply(question: string): string {
 
 export function ambiguousWonjuReply(): string {
   return "원주의 날씨, 소식, 맛집, 역사 중 뭐가 궁금한지 콕 집어 말해줄래요? 🐦";
+}
+
+export function chatReply(question: string): string {
+  if (/심심|재밌는 이야기|농담/.test(question)) return "그럼 상상 놀이 어때? 치악산 구름이 솜사탕이라면 어떤 맛일지 골라보자! ☁️";
+  if (/뭐해|무엇을 하고/.test(question)) return "네 질문 기다리면서 날개를 파닥이고 있었지! 무슨 얘기 할래? 🐦";
+  if (/안녕|반가워/.test(question)) return "안녕! 치악산에서 날아온 꽁드리야. 오늘은 무슨 얘기 할래? 🐦";
+  if (/고마워|감사해/.test(question)) return "별말씀을! 원주 이야기가 궁금하면 언제든 불러줘~ 🐦";
+  return "좋아, 꽁드리랑 가볍게 수다 떨자! 어떤 이야기가 끌려? 🐦";
 }
 
 export function validateChatInput(value: unknown): string | null {
@@ -252,6 +261,15 @@ export function extractGroundingSources(data: unknown): ChatSource[] {
   }).filter((item, index, all) => all.findIndex((candidate) => candidate.url === item.url) === index).slice(0, 6);
 }
 
+export class GeminiRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number) {
+    super(`Gemini generateContent failed (${status})`);
+    this.status = status;
+  }
+}
+
 let modelCheckCache: { available: boolean; expiresAt: number } | null = null;
 
 export async function checkGeminiModel(apiKey: string): Promise<boolean> {
@@ -287,8 +305,7 @@ export async function askGemini(question: string, context: GroundedContext | nul
       body: JSON.stringify(buildGeminiRequest(question, context, history, mode)),
     });
     if (!response.ok) {
-      const detail = (await response.text()).replace(/\s+/g, " ").slice(0, 500);
-      throw new Error(`Gemini generateContent failed (${response.status}): ${detail}`);
+      throw new GeminiRequestError(response.status);
     }
     const data = await response.json();
     const rawText = extractGeminiText(data);
