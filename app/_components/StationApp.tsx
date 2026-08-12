@@ -13,10 +13,17 @@ const DISTRICTS = [
   "우산동", "태장1동", "태장2동", "봉산동", "행구동", "무실동", "반곡관설동",
 ];
 
-const NAV = [
-  ["/", "NOW"], ["/news", "NEWS"], ["/weather", "WEATHER"], ["/map", "MAP"],
-  ["/events", "EVENTS"], ["/city", "CITY"], ["/history", "HISTORY"], ["/discover", "DISCOVER"],
-];
+type NavItem = readonly [href: string, label: string, icon: string];
+type NavGroup = { label: string; items: readonly NavItem[] };
+
+const NAV_GROUPS: readonly NavGroup[] = [
+  { label: "HOME", items: [["/", "지금 원주", "⌂"], ["/news", "뉴스", "◫"], ["/weather", "날씨", "☁"], ["/map", "지도", "◎"]] },
+  { label: "LIFE", items: [["/events", "행사", "◇"], ["/discover", "탐방", "✦"], ["/transport", "교통", "↗"]] },
+  { label: "CITY", items: [["/city", "도시", "◉"], ["/history", "역사", "⌁"], ["/stats", "통계", "▥"]] },
+] as const;
+
+const NAV: readonly NavItem[] = NAV_GROUPS.flatMap((group) => [...group.items]);
+const FEATURED_DISTRICTS = ["무실동", "단계동", "반곡관설동", "단구동", "문막읍", "소초면", "지정면", "행구동"];
 
 const VERIFIED_EVENTS = [
   { date: "2026-08-15", time: "15:00 / 19:00", title: "박경리 탄생 100주년 무용극 〈토지〉", place: "치악예술관", source: "https://www.wonju.go.kr/tojipark/main.do" },
@@ -117,12 +124,12 @@ function ProviderLine({ label, status, time, href }: { label: string; status: Fr
   );
 }
 
-function SectionHead({ index, kicker, title, link }: { index: string; kicker: string; title: string; link?: string }) {
+function SectionHead({ index, kicker, title, link }: { index?: string; kicker?: string; title: string; link?: string }) {
   return (
-    <div className="section-head">
-      <span className="section-index">{index}</span>
-      <div><span className="kicker">{kicker}</span><h2>{title}</h2></div>
-      {link ? <a className="arrow-link" href={link} aria-label={`${title} 더 보기`}>↗</a> : null}
+    <div className={`section-head ${index ? "" : "section-head--simple"}`}>
+      {index ? <span className="section-index">{index}</span> : null}
+      <div>{kicker ? <span className="kicker">{kicker}</span> : null}<h2>{title}</h2></div>
+      {link ? <a className="arrow-link" href={link} aria-label={`${title} 더 보기`}>전체 보기 <span>→</span></a> : null}
     </div>
   );
 }
@@ -135,8 +142,8 @@ function MapPanel({ compact = false }: { compact?: boolean }) {
         src="https://www.openstreetmap.org/export/embed.html?bbox=127.78%2C37.22%2C128.08%2C37.46&layer=mapnik&marker=37.3422%2C127.9202"
         loading="lazy"
       />
-      <div className="map-hud map-hud--top"><span>LIVE BASEMAP</span><span>NEWS 0 · EVENTS 0 · AIR 1</span></div>
-      <div className="map-hud map-hud--bottom">정확한 위치가 검증된 레코드만 오버레이합니다 · © OpenStreetMap contributors</div>
+      <div className="map-hud map-hud--top"><span>원주 지도</span><span>날씨 · 대기</span></div>
+      <div className="map-hud map-hud--bottom">검증된 위치 정보만 표시합니다 · © OpenStreetMap contributors</div>
     </div>
   );
 }
@@ -144,13 +151,14 @@ function MapPanel({ compact = false }: { compact?: boolean }) {
 export function StationApp({ route }: { route: string }) {
   const [snapshot, setSnapshot] = useState<CitySnapshot>(UNAVAILABLE_SNAPSHOT);
   const [now, setNow] = useState<Date | null>(null);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">("light");
   const [query, setQuery] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const tick = () => setNow(new Date());
     tick();
-    const timer = window.setInterval(tick, 1000);
+    const timer = window.setInterval(tick, 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -196,84 +204,107 @@ export function StationApp({ route }: { route: string }) {
   function renderHome() {
     return (
       <>
-        <section className="hero-grid">
-          <div className="hero-weather">
-            <div className="hero-topline"><span>WONJU / 37.3422°N</span><FreshnessBadge status={snapshot.weather.status} /></div>
-            <div className="temperature-row"><strong>{formatValue(snapshot.weather.temperature, "°")}</strong><div><span>{weatherLabel(snapshot.weather.weatherCode)}</span><small>체감 {formatValue(snapshot.weather.apparentTemperature, "°")}</small></div></div>
-            <p className="weather-sentence">{snapshot.weather.status === "UNAVAILABLE" ? "현재 기상 정보를 확인할 수 없습니다." : `지금 원주는 ${weatherLabel(snapshot.weather.weatherCode)}. 오늘 강수확률은 ${formatValue(snapshot.weather.precipitationProbability, "%")}입니다.`}</p>
-            <div className="weather-metrics">
-              <div><span>최고</span><b>{formatValue(snapshot.weather.high, "°")}</b></div>
-              <div><span>최저</span><b>{formatValue(snapshot.weather.low, "°")}</b></div>
-              <div><span>습도</span><b>{formatValue(snapshot.weather.humidity, "%")}</b></div>
-              <div><span>바람</span><b>{formatValue(snapshot.weather.windSpeed, " km/h")}</b></div>
-            </div>
-          </div>
-          <div className="hero-status">
-            <span className="kicker">CITY STATUS</span>
-            <div className={`status-orb status-orb--${snapshot.alerts.label.toLowerCase()}`} aria-hidden="true" />
-            <strong>{snapshot.alerts.label}</strong>
-            <p>{snapshot.alerts.label === "CHECK" ? "공식 특보 피드 미연결 · 기상청에서 직접 확인하세요." : "명시적 특보 규칙으로 산출된 상태입니다."}</p>
-            <a href={snapshot.alerts.sourceUrl} target="_blank" rel="noreferrer">기상청 특보 확인 ↗</a>
-          </div>
-          <div className="hero-clock" aria-live="polite">
-            <span>{now ? new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", weekday: "long", month: "long", day: "2-digit" }).format(now).toUpperCase() : "KOREA STANDARD TIME"}</span>
-            <strong>{now ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(now) : "--:--:--"}</strong>
-            <small>ASIA / SEOUL · UTC+09</small>
-          </div>
-        </section>
-
-        <section className="pulse-strip">
-          <div><span className="live-dot" /> WONJU NOW</div>
-          <div><span>특보</span><strong>{snapshot.alerts.label}</strong></div>
-          <div><span>미세먼지</span><strong>{snapshot.air.grade ?? "—"}</strong></div>
-          <div><span>공식 새소식</span><strong>{snapshot.notices.items.length || "—"}</strong></div>
-          <div><span>최고 / 최저</span><strong>{formatValue(snapshot.weather.high, "°")} / {formatValue(snapshot.weather.low, "°")}</strong></div>
-        </section>
-
-        <section className="content-grid content-grid--news">
+        <section className="home-welcome">
           <div>
-            <SectionHead index="01" kicker="NOW IN WONJU" title="공식 새소식" link="/news" />
+            <span className="home-eyebrow">오늘의 원주</span>
+            <h1>오늘도 원주답게<br />시작해요.</h1>
+            <p>{now ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric", weekday: "long" }).format(now) : "원주의 오늘을 불러오고 있어요"}</p>
+          </div>
+          <div className="compact-clock" aria-live="polite">
+            <strong>{now ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(now) : "--:--"}</strong>
+            <span>KST</span>
+          </div>
+        </section>
+
+        <section className="home-metrics" aria-label="오늘의 원주 요약">
+          <article className="weather-summary">
+            <div className="metric-label"><span>날씨</span><FreshnessBadge status={snapshot.weather.status} /></div>
+            <div className="weather-now"><strong>{formatValue(snapshot.weather.temperature, "°")}</strong><div><b>{weatherLabel(snapshot.weather.weatherCode)}</b><span>체감 {formatValue(snapshot.weather.apparentTemperature, "°")}</span></div></div>
+            <p>{snapshot.weather.status === "UNAVAILABLE" ? "현재 날씨를 확인할 수 없어요." : `최고 ${formatValue(snapshot.weather.high, "°")} · 최저 ${formatValue(snapshot.weather.low, "°")} · 강수 ${formatValue(snapshot.weather.precipitationProbability, "%")}`}</p>
+          </article>
+          <article className={`metric-card metric-card--${snapshot.alerts.label.toLowerCase()}`}>
+            <div className="metric-label"><span>원주 상태</span><i className="metric-dot" /></div>
+            <strong>{snapshot.alerts.label}</strong>
+            <p>{snapshot.alerts.label === "CHECK" ? "특보 직접 확인" : "공식 특보 기준"}</p>
+            <a href={snapshot.alerts.sourceUrl} target="_blank" rel="noreferrer">기상청 열기 →</a>
+          </article>
+          <article className="metric-card">
+            <div className="metric-label"><span>오늘의 공기</span><small>PM2.5</small></div>
+            <strong>{snapshot.air.grade ?? "확인 중"}</strong>
+            <p>{snapshot.air.pm25 === null ? "측정값을 불러오고 있어요" : `${formatValue(snapshot.air.pm25)}㎍/㎥`}</p>
+            <a href="/air">자세히 보기 →</a>
+          </article>
+          <article className="metric-card metric-card--news">
+            <div className="metric-label"><span>새로운 소식</span><small>공식</small></div>
+            <strong>{snapshot.notices.items.length || "—"}<em>건</em></strong>
+            <p>원주시 새소식</p>
+            <a href="/news">모두 보기 →</a>
+          </article>
+          <article className="metric-card">
+            <div className="metric-label"><span>이번 주 행사</span><small>검증됨</small></div>
+            <strong>{VERIFIED_EVENTS.length}<em>건</em></strong>
+            <p>공식 출처 확인 일정</p>
+            <a href="/events">일정 보기 →</a>
+          </article>
+        </section>
+
+        <section className="home-primary-grid">
+          <div className="home-panel local-feed">
+            <SectionHead kicker="NOW IN WONJU" title="지금 원주에서" link="/news" />
             <div className="news-list">
-              {snapshot.notices.items.length ? snapshot.notices.items.slice(0, 5).map((item, index) => (
+              {snapshot.notices.items.length ? snapshot.notices.items.slice(0, 5).map((item) => (
                 <a className="news-row" href={item.canonicalUrl} target="_blank" rel="noreferrer" key={item.id}>
-                  <span className="news-number">{String(index + 1).padStart(2, "0")}</span>
                   <div><strong>{item.title}</strong><small>{item.department} · {item.publishedAt}</small></div>
                   <span>↗</span>
                 </a>
               )) : <Unavailable title="검증된 새소식을 불러오지 못했습니다" detail="원주시청 공식 목록은 그대로 연결해 두었습니다." href={snapshot.notices.sourceUrl} />}
             </div>
           </div>
-          <div><SectionHead index="02" kicker="SPATIAL CONTEXT" title="라이브 맵" link="/map" /><MapPanel compact /></div>
+          <div className="home-panel week-panel">
+            <SectionHead kicker="THIS WEEK" title="이번 주 원주" link="/events" />
+            <div className="weekly-cards">
+              {VERIFIED_EVENTS.map((event, index) => <a className="weekly-card" href={event.source} target="_blank" rel="noreferrer" key={event.title}>
+                <div className={`weekly-card-visual weekly-card-visual--${index}`}><span>{index === 0 ? "공연" : "전시"}</span><b>{event.date}</b></div>
+                <div><small>{event.place}</small><h3>{event.title}</h3><p>{event.time}</p></div>
+              </a>)}
+            </div>
+          </div>
         </section>
 
-        <section className="content-grid content-grid--thirds">
-          <article className="station-card cobalt-card">
-            <SectionHead index="03" kicker="TODAY IN WONJU" title="오늘의 흐름" link="/events" />
-            <p>{snapshot.weather.status === "UNAVAILABLE" ? "날씨와 검증된 행사 데이터가 연결되면 오늘의 동선을 제안합니다." : `최고 ${formatValue(snapshot.weather.high, "°")}, 강수확률 ${formatValue(snapshot.weather.precipitationProbability, "%")}. 공식 행사 피드는 현재 검증 대기 중입니다.`}</p>
-            <span className="card-footnote">DETERMINISTIC SUMMARY · NO AI REQUIRED</span>
-          </article>
-          <article className="station-card changelog-card">
-            <SectionHead index="04" kicker="WONJU CHANGELOG" title="도시 변경 기록" link="/projects" />
-            <div className="empty-lines"><span /><span /><span /></div>
-            <p>확인된 공식 사업·개통·정책 변경이 들어오면 시점과 출처를 함께 기록합니다.</p>
-          </article>
-          <article className="station-card pulse-card">
-            <SectionHead index="05" kicker="EXPERIMENTAL" title="WONJU PULSE" />
-            <strong className="pulse-score">{pulse ?? "—"}<small>/ 100</small></strong>
-            <div className="pulse-bar"><span style={{ width: `${pulse ?? 0}%` }} /></div>
-            <p>날씨·공기·공식 업데이트 수를 정규화한 실험 지표. 실제 혼잡도를 의미하지 않습니다.</p>
-          </article>
+        <section className="neighborhood-panel">
+          <SectionHead kicker="MY NEIGHBORHOOD" title="우리 동네" link="/weather" />
+          <p>원주 25개 읍면동에서 내 동네를 바로 찾아보세요.</p>
+          <div className="district-shortcuts">{FEATURED_DISTRICTS.map((district) => <a href={`/place/${encodeURIComponent(district)}`} key={district}>{district}<span>→</span></a>)}</div>
         </section>
 
-        <section className="provider-board">
-          <SectionHead index="06" kicker="DATA DESK" title="데이터 상태" />
-          <ProviderLine label={snapshot.weather.provider} status={snapshot.weather.status} time={snapshot.weather.fetchedAt} href={snapshot.weather.sourceUrl} />
-          <ProviderLine label={snapshot.air.provider} status={snapshot.air.status} time={snapshot.air.fetchedAt} href={snapshot.air.sourceUrl} />
-          <ProviderLine label={snapshot.notices.provider} status={snapshot.notices.status} time={snapshot.notices.fetchedAt} href={snapshot.notices.sourceUrl} />
-          <ProviderLine label={snapshot.alerts.provider} status={snapshot.alerts.status} time={snapshot.alerts.fetchedAt} href={snapshot.alerts.sourceUrl} />
-          <ProviderLine label={snapshot.population.provider} status={snapshot.population.status} time={snapshot.population.fetchedAt} href={snapshot.population.sourceUrl} />
-          <ProviderLine label={`${snapshot.mayor.provider} · 시장 표기`} status={snapshot.mayor.status} time={snapshot.mayor.fetchedAt} href={snapshot.mayor.sourceUrl} />
+        <section className="home-lower-grid">
+          <div className="home-panel map-card"><SectionHead kicker="AROUND WONJU" title="원주 지도" link="/map" /><MapPanel compact /></div>
+          <div className="home-side-stack">
+            <article className="soft-card changelog-card">
+              <SectionHead kicker="WONJU CHANGELOG" title="오늘 달라진 원주" link="/projects" />
+              <p>확인된 사업·개통·정책 변화만 시점과 출처를 함께 기록해요.</p>
+              <div className="change-lines"><span>+</span><b>새로운 모집 공고</b><small>공식 새소식에서 확인</small></div>
+            </article>
+            <article className="soft-card pulse-card">
+              <div><span className="kicker">WONJU PULSE · EXPERIMENTAL</span><h2>원주 활력</h2></div>
+              <strong className="pulse-score">{pulse ?? "—"}<small>/ 100</small></strong>
+              <div className="pulse-bar"><span style={{ width: `${pulse ?? 0}%` }} /></div>
+              <p>날씨·공기·공식 업데이트를 조합한 비공식 실험 지표예요.</p>
+            </article>
+          </div>
         </section>
+
+        <details className="provider-board">
+          <summary>데이터 출처와 업데이트 상태 <span>자세히 보기</span></summary>
+          <div className="provider-list">
+            <ProviderLine label={snapshot.weather.provider} status={snapshot.weather.status} time={snapshot.weather.fetchedAt} href={snapshot.weather.sourceUrl} />
+            <ProviderLine label={snapshot.air.provider} status={snapshot.air.status} time={snapshot.air.fetchedAt} href={snapshot.air.sourceUrl} />
+            <ProviderLine label={snapshot.notices.provider} status={snapshot.notices.status} time={snapshot.notices.fetchedAt} href={snapshot.notices.sourceUrl} />
+            <ProviderLine label={snapshot.alerts.provider} status={snapshot.alerts.status} time={snapshot.alerts.fetchedAt} href={snapshot.alerts.sourceUrl} />
+            <ProviderLine label={snapshot.population.provider} status={snapshot.population.status} time={snapshot.population.fetchedAt} href={snapshot.population.sourceUrl} />
+            <ProviderLine label={`${snapshot.mayor.provider} · 시장 표기`} status={snapshot.mayor.status} time={snapshot.mayor.fetchedAt} href={snapshot.mayor.sourceUrl} />
+          </div>
+        </details>
       </>
     );
   }
@@ -380,33 +411,50 @@ export function StationApp({ route }: { route: string }) {
   }
 
   const content = routeKey === "now" ? renderHome() : routeKey === "weather" ? renderWeather() : routeKey === "news" ? renderNews() : routeKey === "map" ? renderMap() : routeKey === "events" ? renderEvents() : routeKey === "place" ? renderDistrict() : renderGeneric();
+  const routeTitle = ({ now: "오늘의 원주", news: "원주 뉴스", weather: "원주 날씨", map: "원주 지도", events: "원주 행사", city: "도시 정보", history: "원주 이야기", discover: "원주 탐방", transport: "원주 교통", stats: "원주 통계", population: "원주 인구", air: "원주 대기질", projects: "오늘 달라진 원주", place: selectedDistrict } as Record<string, string>)[routeKey] ?? "WONJU STATION";
 
   return (
     <div className="station-shell">
-      <header className="topbar">
-        <a className="brand" href="/"><span className="brand-mark"><i /><i /><i /></span><span><strong>WONJU STATION</strong><small>원주의 모든 것, 지금 여기.</small></span></a>
-        <nav aria-label="주요 메뉴">{NAV.map(([href, label]) => <a className={(href === "/" ? routeKey === "now" : route.startsWith(href)) ? "active" : ""} href={href} key={href}>{label}</a>)}</nav>
-        <div className="header-actions"><button onClick={() => setQuery(query ? "" : "원주")} aria-label="검색 열기">⌕</button><button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="색상 모드 전환">{theme === "dark" ? "☼" : "◐"}</button><span className={`network-state network-state--${snapshot.weather.status.toLowerCase()}`}>{snapshot.weather.status === "UNAVAILABLE" ? "PARTIAL" : "ONLINE"}</span></div>
-      </header>
+      <aside id="station-sidebar" className={`sidebar ${menuOpen ? "sidebar--open" : ""}`}>
+        <a className="brand" href="/"><span className="brand-mark"><i /><i /><i /></span><span><strong>WONJU<br />STATION</strong><small>원주 시민의 생활 홈</small></span></a>
+        <div className="sidebar-today">
+          <span>오늘의 원주</span>
+          <strong>{formatValue(snapshot.weather.temperature, "°")} <small>{weatherLabel(snapshot.weather.weatherCode)}</small></strong>
+          <p>{snapshot.weather.status === "UNAVAILABLE" ? "날씨 정보를 확인하고 있어요" : `최고 ${formatValue(snapshot.weather.high, "°")} · 최저 ${formatValue(snapshot.weather.low, "°")}`}</p>
+        </div>
+        <nav className="side-nav" aria-label="주요 메뉴">
+          {NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><span>{group.label}</span>{group.items.map(([href, label, icon]) => <a className={(href === "/" ? routeKey === "now" : route.startsWith(href)) ? "active" : ""} href={href} key={href}><i aria-hidden="true">{icon}</i>{label}</a>)}</div>)}
+        </nav>
+        <div className="sidebar-neighborhood"><span>원주 25개 읍면동</span><strong>우리 동네 찾기</strong><a href="/weather">동네 전체 보기 →</a></div>
+        <div className={`sidebar-status network-state--${snapshot.weather.status.toLowerCase()}`}><span className="live-dot" /><div><strong>{snapshot.weather.status === "UNAVAILABLE" ? "일부 정보 확인 중" : "원주 정보 연결됨"}</strong><small>출처와 업데이트 시간 공개</small></div></div>
+      </aside>
 
-      <div className={`search-drawer ${query ? "search-drawer--open" : ""}`}>
-        <label htmlFor="station-search">통합 검색</label>
-        <input id="station-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="동네, 뉴스, 섹션 검색" autoComplete="off" />
-        <button onClick={() => setQuery("")} aria-label="검색 닫기">×</button>
-        {query ? <div className="search-results">{searchResults.length ? searchResults.map((item) => item.href.startsWith("/") ? <a href={item.href} key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></a> : <a href={item.href} target="_blank" rel="noreferrer" key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></a>) : <p>일치하는 결과가 없습니다.</p>}</div> : null}
+      <div className="app-column">
+        <header className="topbar">
+          <button className="menu-toggle" onClick={() => setMenuOpen((open) => !open)} aria-label={menuOpen ? "메뉴 닫기" : "메뉴 열기"} aria-controls="station-sidebar" aria-expanded={menuOpen}>☰</button>
+          <div className="page-heading"><strong>{routeTitle}</strong><span>{now ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "long" }).format(now) : "원주의 오늘"}</span></div>
+          <div className="header-actions"><button onClick={() => setQuery(query ? "" : "원주")} aria-label="검색 열기">⌕</button><button onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="색상 모드 전환">{theme === "dark" ? "☀" : "☾"}</button></div>
+        </header>
+
+        <div className={`search-drawer ${query ? "search-drawer--open" : ""}`}>
+          <label htmlFor="station-search">통합 검색</label>
+          <input id="station-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="동네, 뉴스, 메뉴를 검색해보세요" autoComplete="off" />
+          <button onClick={() => setQuery("")} aria-label="검색 닫기">×</button>
+          {query ? <div className="search-results">{searchResults.length ? searchResults.map((item) => item.href.startsWith("/") ? <a href={item.href} key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></a> : <a href={item.href} target="_blank" rel="noreferrer" key={`${item.href}-${item.title}`}><span>{item.meta}</span><strong>{item.title}</strong></a>) : <p>일치하는 결과가 없습니다.</p>}</div> : null}
+        </div>
+
+        <main>
+          {snapshot.alerts.level !== null && snapshot.alerts.level >= 3 ? <section className={`alert-banner alert-banner--${snapshot.alerts.label.toLowerCase()}`} role="alert"><span>원주 {snapshot.alerts.label}</span><div><strong>{snapshot.alerts.title}</strong><p>{snapshot.alerts.detail}</p></div><a href={snapshot.alerts.sourceUrl} target="_blank" rel="noreferrer">공식 출처 →</a></section> : null}
+          {content}
+        </main>
+        <footer>
+          <div className="footer-brand"><strong>WONJU STATION</strong><span>도시를 한눈에, 동네를 더 가까이.</span></div>
+          <div><span>데이터 안내</span><a href="/city">출처와 최신성</a><a href="/map">위치 신뢰도</a></div>
+          <div><span>둘러보기</span><a href="/weather">날씨</a><a href="/news">뉴스</a><a href="/history">원주 이야기</a></div>
+          <div className="footer-status"><small>© {now?.getFullYear() ?? 2026} WONJU STATION</small></div>
+        </footer>
       </div>
-
-      <div className="route-rail"><span>{routeKey.toUpperCase()}</span><span>DATA FIRST · SOURCE VISIBLE · FAIL CLOSED</span></div>
-      <main>
-        {snapshot.alerts.level !== null && snapshot.alerts.level >= 3 ? <section className={`alert-banner alert-banner--${snapshot.alerts.label.toLowerCase()}`} role="alert"><span>WONJU {snapshot.alerts.label}</span><div><strong>{snapshot.alerts.title}</strong><p>{snapshot.alerts.detail}</p></div><a href={snapshot.alerts.sourceUrl} target="_blank" rel="noreferrer">SOURCE ↗</a></section> : null}
-        {content}
-      </main>
-      <footer>
-        <div className="footer-brand"><strong>WONJU STATION</strong><span>도시를 한눈에, 동네를 더 가까이.</span></div>
-        <div><span>DATA POLICY</span><a href="/city">출처와 최신성</a><a href="/map">위치 신뢰도</a></div>
-        <div><span>EXPLORE</span><a href="/weather">날씨</a><a href="/news">뉴스</a><a href="/history">아카이브</a></div>
-        <div className="footer-status"><span className="live-dot" /> SYSTEM {snapshot.weather.status === "UNAVAILABLE" ? "PARTIAL" : "OPERATIONAL"}<small>© {now?.getFullYear() ?? 2026} WONJU STATION</small></div>
-      </footer>
+      {menuOpen ? <button className="sidebar-scrim" onClick={() => setMenuOpen(false)} aria-label="메뉴 닫기" /> : null}
     </div>
   );
 }
@@ -416,5 +464,5 @@ function PageShell({ eyebrow, title, intro, children }: { eyebrow: string; title
 }
 
 function Unavailable({ title, detail, href }: { title: string; detail: string; href?: string }) {
-  return <div className="unavailable"><span>UNAVAILABLE</span><h3>{title}</h3><p>{detail}</p>{href ? <a href={href} target="_blank" rel="noreferrer">공식 페이지 열기 ↗</a> : null}</div>;
+  return <div className="unavailable"><span>정보 확인 중</span><h3>{title}</h3><p>{detail}</p>{href ? <a href={href} target="_blank" rel="noreferrer">공식 페이지 열기 →</a> : null}</div>;
 }

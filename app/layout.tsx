@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase,
     title: { default: "WONJU STATION", template: "%s · WONJU STATION" },
-    description: "날씨, 공식 새소식, 지도와 도시 상태를 한눈에 보는 독립 원주 시티 대시보드.",
+    description: "날씨, 공식 새소식, 행사, 동네와 지도를 한눈에 보는 원주 시민의 생활 홈.",
     applicationName: "WONJU STATION",
     manifest: "/manifest.webmanifest",
     icons: { icon: "/og.png", apple: "/og.png" },
@@ -30,9 +30,8 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#101311", colorScheme: "dark light" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#f2f1ec", colorScheme: "light dark" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="ko" suppressHydrationWarning><body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body></html>;
 }
-
