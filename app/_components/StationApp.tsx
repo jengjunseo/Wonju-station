@@ -319,9 +319,20 @@ export function StationApp({ route }: { route: string }) {
   }
 
   function renderEvents() {
+    const eventDays = Array.from({ length: 7 }, (_, index) => {
+      if (!now) return { date: "--", label: index === 0 ? "오늘" : "--" };
+      const date = new Date(now.getTime() + index * 86_400_000);
+      return {
+        date: new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", day: "numeric" }).format(date),
+        label: index === 0
+          ? "오늘"
+          : new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", weekday: "short" }).format(date),
+      };
+    });
+
     return (
       <PageShell eyebrow="EVENTS & CALENDAR" title="오늘 원주에서 무슨 일이 열리나" intro="날짜·장소·주최·공식 링크가 모두 확인된 행사만 표시합니다. 자동 수집을 가장하지 않고, 공식 행사 중 직접 검증한 일정과 원문을 제공합니다.">
-        <div className="date-strip">{["오늘", "목", "금", "토", "일", "월", "화"].map((day, i) => <div className={i === 0 ? "active" : ""} key={day}><strong>{12 + i}</strong><span>{day}</span></div>)}</div>
+        <div className="date-strip">{eventDays.map((day, index) => <div className={index === 0 ? "active" : ""} key={`${day.date}-${day.label}`}><strong>{day.date}</strong><span>{day.label}</span></div>)}</div>
         <div className="event-list">{VERIFIED_EVENTS.map((event, index) => <a href={event.source} target="_blank" rel="noreferrer" key={event.title}><span>{String(index + 1).padStart(2, "0")}</span><time>{event.date}<small>{event.time}</small></time><div><small>{event.place}</small><h2>{event.title}</h2></div><b>VERIFIED ↗</b></a>)}</div>
         <div className="link-cards"><a href="https://www.wonju.go.kr/www/sub.do?key=213" target="_blank" rel="noreferrer"><span>01</span><strong>원주시 문화행사</strong><small>공식 일정 열기 ↗</small></a><a href="https://www.wonju.go.kr/tour/index.do" target="_blank" rel="noreferrer"><span>02</span><strong>원주관광</strong><small>공식 관광 정보 ↗</small></a></div>
       </PageShell>
