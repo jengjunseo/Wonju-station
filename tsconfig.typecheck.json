@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["app/**/*.ts", "app/**/*.tsx", "lib/**/*.ts", "next-env.d.ts"],
+  "exclude": ["node_modules", "dist", ".vinext", "examples", "db", "worker", "build"]
+}
