@@ -14,6 +14,7 @@ import {
   routeChatQuestion,
   selectGroundedContext,
   validateChatInput,
+  webProviderFailure,
   type ChatTurn,
 } from "../../../lib/chat";
 import { getCitySnapshot, searchWonjuPlaces } from "../../../lib/providers";
@@ -104,8 +105,15 @@ export async function POST(request: Request) {
     return Response.json({ available: true, mode, searchUsed: answer.searchUsed, message: answer.message, sources }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     const providerStatus = error instanceof GeminiRequestError ? error.status : null;
-    if (mode === "WONJU_WEB" && providerStatus === 429) {
-      return Response.json({ available: true, mode, searchUsed: false, message: CHAT_SEARCH_UNAVAILABLE_MESSAGE, sources: [], provider: { name: "Google Search grounding", status: "QUOTA_EXHAUSTED", code: 429 } }, { headers: { "Cache-Control": "no-store" } });
+    if (mode === "WONJU_WEB") {
+      return Response.json({
+        available: true,
+        mode,
+        searchUsed: false,
+        message: CHAT_SEARCH_UNAVAILABLE_MESSAGE,
+        sources: [],
+        provider: webProviderFailure(providerStatus),
+      }, { headers: { "Cache-Control": "no-store" } });
     }
     return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }

@@ -21,6 +21,14 @@ export type GroundedContext = {
 };
 export type GeminiAnswer = { message: string; sources: ChatSource[]; searchUsed: boolean };
 
+export function webProviderFailure(status: number | null) {
+  return {
+    name: "Gemini 2.5 Flash-Lite + Google Search",
+    status: status === 429 ? "QUOTA_EXHAUSTED" as const : "UNAVAILABLE" as const,
+    code: status,
+  };
+}
+
 const PERSONA = [
   "너는 치악산에서 날아온 활기찬 꿩 마스코트 ‘꽁드리’다.",
   "친근한 한국어 반말을 기본으로 짧고 자연스럽게 답하고, 답변마다 이모지는 1~2개만 사용한다.",

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { airGrade, alertLabel, dedupeNotices, extractDistrictEvidence, freshnessFromAge, newsCoverage, normalizeTitle, noticesAreSameStory, pulseScore } from "../lib/city.ts";
 import { buildWonjuPlaceQuery, fetchNaverNews, latLonToKmaGrid, normalizeKakaoPlaces, normalizeNaverItems, parsePopulationDetail, searchWonjuPlaces } from "../lib/providers.ts";
-import { CHAT_UNSUPPORTED_MESSAGE, GEMINI_MODEL, GEMINI_WEB_MODEL, buildGeminiRequest, buildGroundedPrompt, extractGroundingSources, modelForMode, routeChatQuestion, selectGroundedContext, stripModelProvenance, validateChatInput } from "../lib/chat.ts";
+import { CHAT_UNSUPPORTED_MESSAGE, GEMINI_MODEL, GEMINI_WEB_MODEL, buildGeminiRequest, buildGroundedPrompt, extractGroundingSources, modelForMode, routeChatQuestion, selectGroundedContext, stripModelProvenance, validateChatInput, webProviderFailure } from "../lib/chat.ts";
 
 const EMPTY_CHAT_CONTEXT = { generatedAt: "2026-08-12T00:00:00.000Z", topics: [], facts: {}, sources: [] };
 
@@ -162,6 +162,19 @@ test("adds Google Search only to Wonju web requests", () => {
   const web = buildGeminiRequest("원주 카페 알려줘", null, [], "WONJU_WEB");
   assert.deepEqual(web.tools, [{ google_search: {} }]);
   assert.equal("tools" in buildGeminiRequest("안녕", null, [], "CHAT"), false);
+});
+
+test("contains Wonju web provider failures without disabling other chatbot modes", () => {
+  assert.deepEqual(webProviderFailure(429), {
+    name: "Gemini 2.5 Flash-Lite + Google Search",
+    status: "QUOTA_EXHAUSTED",
+    code: 429,
+  });
+  assert.deepEqual(webProviderFailure(503), {
+    name: "Gemini 2.5 Flash-Lite + Google Search",
+    status: "UNAVAILABLE",
+    code: 503,
+  });
 });
 
 test("builds bounded Wonju-qualified Kakao queries and keeps only verified Wonju places", async () => {
