@@ -59,8 +59,8 @@ Official Gemini documentation confirms `gemini-2.5-flash-lite` and `google_searc
 - Branch: `main`
 - Public URL: https://wonju-station-live.tsiba5021.chatgpt.site
 - Starting SHA: `6418033af6b6ac7698035f413450c12d9fd0ed54`
-- Release source candidate: `a2d5dca34568f3d9f65489f88c6202a9ddddeea2` (Sites version 18); final documentation commit follows hosted certification.
+- Release source: repository `main` HEAD recorded by the final Sites version.
 
 ## Release state
 
-Sites version 18 deployed successfully. Naver is live-certified with 30 raw results, 30 normalized results, 12 after provider dedupe and 8 post-Wonju-City-merge contributions. Google web mode is fail-closed at `NO_GROUNDING_SOURCES`; Station, Kakao and normal persona lanes remain independent. Final validation and documentation are recorded by the following release commit/version.
+Sites version 18 provided the external provider smoke evidence; the final release also removes a session-restore hydration mismatch found during browser certification. Naver is live-certified with 30 raw results, 30 normalized results, 12 after provider dedupe and 8 post-Wonju-City-merge contributions. Google web mode is fail-closed at `NO_GROUNDING_SOURCES`; Station, Kakao and normal persona lanes remain independent.

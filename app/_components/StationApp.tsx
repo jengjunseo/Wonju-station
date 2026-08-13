@@ -237,18 +237,8 @@ function StationBoard({ items, urgent }: { items: StationBoardItem[]; urgent: St
 }
 
 export function StationApp({ route }: { route: string }) {
-  const [snapshot, setSnapshot] = useState<CitySnapshot>(() => {
-    if (warmCitySnapshot) return warmCitySnapshot;
-    if (typeof window === "undefined") return UNAVAILABLE_SNAPSHOT;
-    try {
-      const stored = parseStoredCitySnapshot(window.sessionStorage.getItem(CITY_SNAPSHOT_STORAGE_KEY));
-      if (stored) warmCitySnapshot = stored;
-      return stored ?? UNAVAILABLE_SNAPSHOT;
-    } catch {
-      return UNAVAILABLE_SNAPSHOT;
-    }
-  });
-  const [hydrating, setHydrating] = useState(snapshot === UNAVAILABLE_SNAPSHOT);
+  const [snapshot, setSnapshot] = useState<CitySnapshot>(UNAVAILABLE_SNAPSHOT);
+  const [hydrating, setHydrating] = useState(true);
   const [currentRoute, setCurrentRoute] = useState(route);
   const [now, setNow] = useState<Date | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("light");
@@ -274,6 +264,19 @@ export function StationApp({ route }: { route: string }) {
       const fixture = controlledAlert === "emergency" ? { level: 4 as const, label: "EMERGENCY" as const, title: "통제된 비상 UI 시험" } : controlledAlert === "warning" ? { level: 3 as const, label: "WARNING" as const, title: "통제된 경고 UI 시험" } : { level: 0 as const, label: "NORMAL" as const, title: null };
       return { ...data, alerts: { ...data.alerts, ...fixture, provider: "CONTROLLED TEST FIXTURE", status: "FRESH", fetchedAt: new Date().toISOString(), detail: "개발 환경에서만 활성화되는 시각 검증 상태" } };
     };
+    let stored = warmCitySnapshot;
+    if (!stored) {
+      try { stored = parseStoredCitySnapshot(window.sessionStorage.getItem(CITY_SNAPSHOT_STORAGE_KEY)); } catch { /* storage may be disabled */ }
+    }
+    if (stored) {
+      warmCitySnapshot = stored;
+      const restored = stored;
+      queueMicrotask(() => {
+        if (!active) return;
+        setSnapshot(withControlledAlert(restored));
+        setHydrating(false);
+      });
+    }
     const refresh = () => requestCitySnapshot()
       .then((data) => { if (active) setSnapshot(withControlledAlert(data)); })
       .catch(() => { /* keep the most recent verified snapshot */ })
