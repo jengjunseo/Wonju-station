@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     const sources = mode === "STATION" ? context?.sources ?? [] : answer.sources;
     return Response.json({ available: true, mode, searchUsed: answer.searchUsed, message: answer.message, sources }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    const providerStatus = error instanceof GeminiRequestError ? error.status : null;
+    const providerDiagnostic = error instanceof GeminiRequestError ? error.diagnostic : null;
     if (mode === "WONJU_WEB") {
       return Response.json({
         available: true,
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
         searchUsed: false,
         message: CHAT_SEARCH_UNAVAILABLE_MESSAGE,
         sources: [],
-        provider: webProviderFailure(providerStatus),
+        provider: webProviderFailure(providerDiagnostic),
       }, { headers: { "Cache-Control": "no-store" } });
     }
     return Response.json({ available: false, mode, searchUsed: false, message: CHAT_UNAVAILABLE_MESSAGE, sources: [] }, { status: 503, headers: { "Cache-Control": "no-store" } });

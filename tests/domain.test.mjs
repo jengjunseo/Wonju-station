@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { airGrade, alertLabel, dedupeNotices, extractDistrictEvidence, freshnessFromAge, newsCoverage, normalizeTitle, noticesAreSameStory, pulseScore } from "../lib/city.ts";
-import { buildWonjuPlaceQuery, fetchNaverNews, latLonToKmaGrid, normalizeKakaoPlaces, normalizeNaverItems, parsePopulationDetail, searchWonjuPlaces } from "../lib/providers.ts";
-import { CHAT_UNSUPPORTED_MESSAGE, GEMINI_MODEL, GEMINI_WEB_MODEL, buildGeminiRequest, buildGroundedPrompt, extractGroundingSources, modelForMode, routeChatQuestion, selectGroundedContext, stripModelProvenance, validateChatInput, webProviderFailure } from "../lib/chat.ts";
+import { buildNaverNewsRequest, buildWonjuPlaceQuery, fetchNaverNews, latLonToKmaGrid, normalizeKakaoPlaces, normalizeNaverItems, parsePopulationDetail, searchWonjuPlaces } from "../lib/providers.ts";
+import { CHAT_SEARCH_UNAVAILABLE_MESSAGE, CHAT_UNSUPPORTED_MESSAGE, GEMINI_MODEL, GEMINI_WEB_MODEL, buildGeminiRequest, buildGroundedPrompt, classifyGeminiProviderError, extractGroundingSources, modelForMode, routeChatQuestion, selectGroundedContext, stripModelProvenance, validateChatInput, webProviderFailure } from "../lib/chat.ts";
+import { WONJU_TMI } from "../lib/content.ts";
+import { CITY_SNAPSHOT_STORAGE_KEY, internalStationPath, nextRotatingIndex, parseStoredCitySnapshot, serializeCitySnapshot } from "../lib/experience.ts";
 
 const EMPTY_CHAT_CONTEXT = { generatedAt: "2026-08-12T00:00:00.000Z", topics: [], facts: {}, sources: [] };
 
@@ -67,6 +69,14 @@ test("normalizes precise Naver Wonju results without copying article bodies", ()
   assert.equal(items[0].summary, "원주시 무실동에서 열리는 행사 요약입니다.");
 });
 
+test("constructs the current Naver API HUB news boundary without renaming secrets", () => {
+  const request = buildNaverNewsRequest("client-id", "client-secret");
+  assert.match(request.url, /^https:\/\/naverapihub\.apigw\.ntruss\.com\/search\/v1\/news\?/);
+  assert.equal(new URL(request.url).searchParams.get("query"), "원주시");
+  assert.deepEqual(request.headers, { "X-NCP-APIGW-API-KEY-ID": "client-id", "X-NCP-APIGW-API-KEY": "client-secret" });
+  assert.equal("X-Naver-Client-Id" in request.headers, false);
+});
+
 test("keeps Naver credential failure isolated", async () => {
   const result = await fetchNaverNews();
   assert.equal(result.status, "UNAVAILABLE");
@@ -127,8 +137,9 @@ test("routes the five chatbot modes deterministically", () => {
     ["원주 빵집 찾아줘.", "WONJU_PLACE", false],
     ["단계동에서 밥 먹을 곳 있어?", "WONJU_PLACE", false],
     ["원주 명소 찾아줘.", "WONJU_PLACE", false],
-    ["원주 출신 유명인은 누가 있어?", "WONJU_WEB", true],
-    ["원주 관련 재미있는 잡학 알려줘.", "WONJU_WEB", true],
+    ["원주 출신 유명인은 누가 있어?", "STATION", false],
+    ["원주 관련 재미있는 잡학 알려줘.", "STATION", false],
+    ["원주에 대해 아무거나 TMI 하나 줘", "STATION", false],
     ["꽁드리 뭐해?", "CHAT", false],
     ["심심해~", "CHAT", false],
     ["원주 어때?", "CHAT", false],
@@ -165,16 +176,47 @@ test("adds Google Search only to Wonju web requests", () => {
 });
 
 test("contains Wonju web provider failures without disabling other chatbot modes", () => {
-  assert.deepEqual(webProviderFailure(429), {
+  const diagnostic = classifyGeminiProviderError(429, { error: { status: "RESOURCE_EXHAUSTED", details: [] } });
+  assert.deepEqual(webProviderFailure(diagnostic), {
     name: "Gemini 2.5 Flash-Lite + Google Search",
-    status: "QUOTA_EXHAUSTED",
+    status: "UNKNOWN_PROVIDER_429",
     code: 429,
+    errorStatus: "RESOURCE_EXHAUSTED",
+    quotaMetric: null,
+    quotaId: null,
+    quotaDimensions: null,
+    quotaValue: null,
+    retryDelay: null,
   });
-  assert.deepEqual(webProviderFailure(503), {
-    name: "Gemini 2.5 Flash-Lite + Google Search",
-    status: "UNAVAILABLE",
-    code: 503,
-  });
+  assert.match(CHAT_SEARCH_UNAVAILABLE_MESSAGE, /연결되지 않네요/);
+  assert.doesNotMatch(CHAT_SEARCH_UNAVAILABLE_MESSAGE, /오늘.*다 썼/);
+});
+
+test("classifies Google quota evidence instead of guessing from HTTP 429", () => {
+  const zero = classifyGeminiProviderError(429, { error: { status: "RESOURCE_EXHAUSTED", details: [{ "@type": "type.googleapis.com/google.rpc.QuotaFailure", violations: [{ quotaMetric: "generativelanguage.googleapis.com/generate_content_free_tier_requests", quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier", quotaDimensions: { model: "gemini-2.5-flash-lite" }, quotaValue: "0" }] }] } });
+  assert.equal(zero.classification, "ZERO_OR_MISSING_FREE_ENTITLEMENT");
+  assert.equal(zero.quotaValue, "0");
+  const retry = classifyGeminiProviderError(429, { error: { status: "RESOURCE_EXHAUSTED", details: [{ "@type": "type.googleapis.com/google.rpc.RetryInfo", retryDelay: "31s" }] } });
+  assert.equal(retry.classification, "RATE_LIMIT");
+  assert.equal(retry.retryDelay, "31s");
+});
+
+test("keeps the TMI bank verified and exposes it only as Station context", () => {
+  assert.ok(WONJU_TMI.length >= 20);
+  assert.ok(WONJU_TMI.every((item) => item.id && item.text && /^https:\/\//.test(item.sourceUrl) && item.sourceLabel));
+  assert.equal(routeChatQuestion("원주에 대해 아무거나 TMI 하나 줘"), "STATION");
+});
+
+test("supports persistent internal navigation and bounded warm snapshot storage", () => {
+  assert.equal(CITY_SNAPSHOT_STORAGE_KEY, "wonju-station:city-snapshot:v1");
+  assert.equal(internalStationPath("/news", "https://station.example"), "/news");
+  assert.equal(internalStationPath("https://outside.example/news", "https://station.example"), null);
+  assert.equal(nextRotatingIndex(0, 3, -1), 2);
+  assert.equal(nextRotatingIndex(2, 3), 0);
+  const snapshot = { generatedAt: "2026-08-12T00:00:00.000Z", weather: {}, air: {}, alerts: {}, notices: {}, population: {} };
+  const raw = serializeCitySnapshot(snapshot, 1_000);
+  assert.equal(parseStoredCitySnapshot(raw, 1_001).generatedAt, snapshot.generatedAt);
+  assert.equal(parseStoredCitySnapshot(raw, 1_000 + 11 * 60_000), null);
 });
 
 test("builds bounded Wonju-qualified Kakao queries and keeps only verified Wonju places", async () => {

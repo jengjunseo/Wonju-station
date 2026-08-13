@@ -12,8 +12,8 @@ const KMA_SOURCE_URL = "https://www.data.go.kr/data/15084084/openapi.do";
 const AIRKOREA_STATION_URL = "https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getMsrstnList";
 const AIRKOREA_MEASURE_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty";
 const AIRKOREA_SOURCE_URL = "https://www.data.go.kr/data/15073861/openapi.do";
-const NAVER_NEWS_URL = "https://openapi.naver.com/v1/search/news.json";
-const NAVER_NEWS_SOURCE_URL = "https://developers.naver.com/docs/serviceapi/search/news/news.md";
+const NAVER_NEWS_URL = "https://naverapihub.apigw.ntruss.com/search/v1/news";
+const NAVER_NEWS_SOURCE_URL = "https://api.ncloud-docs.com/docs/naver-api-hub-search-news";
 const KAKAO_ADDRESS_URL = "https://dapi.kakao.com/v2/local/search/address.json";
 const KAKAO_KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
 export const KAKAO_LOCAL_SOURCE_URL = "https://developers.kakao.com/docs/ko/local/dev-guide#search-by-keyword";
@@ -624,6 +624,14 @@ export function normalizeNaverItems(data: unknown): Notice[] {
 
 let naverNewsCache: { value: ProviderStamp & { key: "NAVER_NEWS"; items: Notice[] }; expiresAt: number } | null = null;
 
+export function buildNaverNewsRequest(clientId: string, clientSecret: string) {
+  const params = new URLSearchParams({ query: "원주시", display: "30", start: "1", sort: "date" });
+  return {
+    url: `${NAVER_NEWS_URL}?${params}`,
+    headers: { "X-NCP-APIGW-API-KEY-ID": clientId, "X-NCP-APIGW-API-KEY": clientSecret },
+  };
+}
+
 export async function fetchNaverNews(): Promise<ProviderStamp & { key: "NAVER_NEWS"; items: Notice[] }> {
   const clientId = envValue("NAVER_NEWS_CLIENT_ID");
   const clientSecret = envValue("NAVER_NEWS_CLIENT_SECRET");
@@ -632,10 +640,13 @@ export async function fetchNaverNews(): Promise<ProviderStamp & { key: "NAVER_NE
   }
   if (naverNewsCache && naverNewsCache.expiresAt > Date.now()) return naverNewsCache.value;
   try {
-    const params = new URLSearchParams({ query: "원주시", display: "30", start: "1", sort: "date" });
-    const response = await safeFetch(`${NAVER_NEWS_URL}?${params}`, 5000, { headers: { "X-Naver-Client-Id": clientId, "X-Naver-Client-Secret": clientSecret } });
-    const items = dedupeNotices(normalizeNaverItems(await response.json())).slice(0, 12);
-    const value = { provider: "Naver 뉴스 검색", key: "NAVER_NEWS" as const, sourceUrl: NAVER_NEWS_SOURCE_URL, status: "LIVE" as const, fetchedAt: new Date().toISOString(), detail: "정밀 질의: 원주시 · 날짜순 30건 · 본문 미수집", items };
+    const request = buildNaverNewsRequest(clientId, clientSecret);
+    const response = await safeFetch(request.url, 5000, { headers: request.headers });
+    const data = await response.json();
+    const rawCount = Array.isArray((data as { items?: unknown[] }).items) ? (data as { items: unknown[] }).items.length : 0;
+    const normalized = normalizeNaverItems(data);
+    const items = dedupeNotices(normalized).slice(0, 12);
+    const value = { provider: "Naver 뉴스 검색", key: "NAVER_NEWS" as const, sourceUrl: NAVER_NEWS_SOURCE_URL, status: "LIVE" as const, fetchedAt: new Date().toISOString(), detail: `API HUB · 원주시 · 원문 ${rawCount}건 · 정규화 ${normalized.length}건 · 자체 중복 제거 후 ${items.length}건 · 본문 미수집`, items };
     naverNewsCache = { value, expiresAt: Date.now() + 5 * 60_000 };
     return value;
   } catch (error) {
@@ -682,6 +693,7 @@ export async function fetchNotices(): Promise<NewsSnapshot> {
   const [official, naver] = await Promise.all([fetchOfficialNotices(), fetchNaverNews()]);
   const clustered = dedupeNotices([...official.items, ...naver.items]).slice(0, 16);
   const items = await geolocateNews(clustered);
+  const naverPostDedupe = items.filter((item) => item.sources?.some((itemSource) => itemSource.provider === "NAVER_NEWS")).length;
   const liveProviders = [official, naver].filter((provider) => provider.status !== "UNAVAILABLE");
   const fetchedAt = liveProviders.map((provider) => provider.fetchedAt).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
   return {
@@ -691,7 +703,7 @@ export async function fetchNotices(): Promise<NewsSnapshot> {
     fetchedAt,
     detail: naver.status === "UNAVAILABLE" ? "원주시청 피드는 독립 운영 · Naver는 자격 증명 대기 또는 실패" : "독립 제공자 통합 · 결정론적 교차 중복 제거",
     items,
-    providers: [official, naver].map(({ key, provider, sourceUrl, status, fetchedAt: time, detail }) => ({ key, provider, sourceUrl, status, fetchedAt: time, detail })),
+    providers: [official, naver].map(({ key, provider, sourceUrl, status, fetchedAt: time, detail }) => ({ key, provider, sourceUrl, status, fetchedAt: time, detail: key === "NAVER_NEWS" && status !== "UNAVAILABLE" ? `${detail} · 통합 중복 제거 후 기여 ${naverPostDedupe}건` : detail })),
     coverage: newsCoverage(items),
   };
 }

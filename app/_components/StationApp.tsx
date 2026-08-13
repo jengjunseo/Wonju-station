@@ -1,11 +1,14 @@
 "use client";
 
-/* eslint-disable @next/next/no-html-link-for-pages -- vinext production client navigation currently throws; document navigation is the reliable deployed path. */
+/* eslint-disable @next/next/no-html-link-for-pages -- native anchors are intercepted by the persistent shell and retain deep-link semantics. */
+/* eslint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- delegated click handling only enhances native anchors; their keyboard behavior remains native. */
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import type { CitySnapshot, Freshness } from "../../lib/city";
 import { pulseScore } from "../../lib/city";
-import { HISTORICAL_PEOPLE, HISTORY_TIMELINE, VERIFIED_EVENTS } from "../../lib/content";
+import { HISTORICAL_PEOPLE, HISTORY_TIMELINE, VERIFIED_EVENTS, WONJU_TMI } from "../../lib/content";
+import { CITY_REFRESH_INTERVAL_MS, CITY_SNAPSHOT_STORAGE_KEY, internalStationPath, nextRotatingIndex, parseStoredCitySnapshot, serializeCitySnapshot } from "../../lib/experience";
 import "./station.css";
 
 const ChatAssistant = lazy(() => import("./ChatAssistant"));
@@ -54,7 +57,7 @@ const UNAVAILABLE_SNAPSHOT: CitySnapshot = {
     provider: "원주시청 새소식", sourceUrl: "https://www.wonju.go.kr/www/sub.do?key=209", status: "UNAVAILABLE",
     fetchedAt: null, detail: "연결 중", items: [], providers: [
       { key: "WONJU_CITY", provider: "원주시청 새소식", sourceUrl: "https://www.wonju.go.kr/www/sub.do?key=209", status: "UNAVAILABLE", fetchedAt: null, detail: "연결 중" },
-      { key: "NAVER_NEWS", provider: "Naver 뉴스 검색", sourceUrl: "https://developers.naver.com/docs/serviceapi/search/news/news.md", status: "UNAVAILABLE", fetchedAt: null, detail: "자격 증명 대기" },
+      { key: "NAVER_NEWS", provider: "Naver 뉴스 검색", sourceUrl: "https://api.ncloud-docs.com/docs/naver-api-hub-search-news", status: "UNAVAILABLE", fetchedAt: null, detail: "연결 상태 확인 전" },
     ], coverage: { geolocated: 0, eligible: 0, percentage: null },
   },
   population: {
@@ -66,11 +69,11 @@ const UNAVAILABLE_SNAPSHOT: CitySnapshot = {
 };
 
 const PAGE_INFO: Record<string, { eyebrow: string; title: string; summary: string; metrics: Array<[string, string]> }> = {
-  city: { eyebrow: "CITY DESK", title: "원주를 숫자로 읽는 곳", summary: "인구, 도시 구조, 행정 정보와 변화 기록을 한 화면에서 탐색합니다. 현재값은 검증된 제공자가 연결된 항목만 공개합니다.", metrics: [["도시 통계", "PROVIDER READY"], ["인구", "SOURCE REQUIRED"], ["WONJU NEXT", "CURATED ONLY"]] },
-  history: { eyebrow: "CITY ARCHIVE", title: "시간 위에 세워진 원주", summary: "시대·장소·인물을 연결하는 출처 중심의 도시 아카이브입니다. 역사 항목은 검증 가능한 공식 자료가 있을 때만 발행합니다.", metrics: [["타임라인", "SOURCE-LED"], ["인물", "NO UNSOURCED BIO"], ["지도 연결", "PLACE CONFIDENCE"]] },
-  discover: { eyebrow: "WEEKEND DESK", title: "이번 주말, 원주 어디로 갈까", summary: "날씨와 운영 정보를 확인해 장소를 추천하는 결정형 탐색 화면입니다. 확인되지 않은 영업시간과 행사는 추천하지 않습니다.", metrics: [["실내", "WEATHER-SAFE"], ["야외", "FORECAST-LED"], ["가족", "ACCESS CHECK"]] },
-  transport: { eyebrow: "MOBILITY", title: "원주 이동 현황", summary: "철도, 시외·고속버스, 도로와 주차 정보를 연결할 준비가 되어 있습니다. 실시간 도착 정보는 공식 계약이 확인된 뒤 표시합니다.", metrics: [["철도", "LINKED"], ["버스", "PROVIDER NEEDED"], ["도로", "PROVIDER NEEDED"]] },
-  stats: { eyebrow: "CITY STATISTICS", title: "통계는 출처와 시점을 함께", summary: "서로 다른 기준일의 숫자를 섞지 않고, 비교 가능한 지표만 시각화합니다.", metrics: [["출처", "VISIBLE"], ["기준일", "REQUIRED"], ["수치 실패", "FAIL CLOSED"]] },
+  city: { eyebrow: "CITY DESK", title: "원주를 숫자로 읽는 곳", summary: "인구와 행정 정보, 도시의 변화를 한 화면에서 둘러보세요. 숫자에는 언제 확인했는지도 함께 적어둡니다.", metrics: [["도시 통계", "공식 자료"], ["인구", "기준일 표시"], ["원주의 변화", "확인된 소식"]] },
+  history: { eyebrow: "CITY ARCHIVE", title: "시간 위에 세워진 원주", summary: "원주의 시대와 장소, 사람 이야기를 짧고 편하게 만나보세요. 더 궁금할 땐 공식 자료로 바로 이어집니다.", metrics: [["타임라인", "원주시 연혁"], ["인물", "박물관 자료"], ["장소", "원주관광"]] },
+  discover: { eyebrow: "WEEKEND DESK", title: "이번 주말, 원주 어디로 갈까", summary: "공식 페이지에서 주소와 방문 정보를 확인할 수 있는 곳만 골랐어요. 마음 가는 곳을 한 번 뽑아봐도 좋아요.", metrics: [["실내", "문화 공간"], ["산책", "원주 명소"], ["아무거나", "한 곳 뽑기"]] },
+  transport: { eyebrow: "MOBILITY", title: "원주 이동 현황", summary: "버스와 도로, 주차 정보를 확인할 수 있는 원주시 공식 창구를 모았어요. 실시간 도착 정보는 제공하지 않습니다.", metrics: [["교통", "공식 센터"], ["주차", "공영주차장"], ["여행", "시티투어"]] },
+  stats: { eyebrow: "CITY STATISTICS", title: "숫자로 보는 원주", summary: "인구와 세대수를 기준일과 함께 보여드려요. 서로 다른 달의 숫자는 섞지 않습니다.", metrics: [["인구", "기준일 표시"], ["세대", "월별 현황"], ["변화", "전월 비교"]] },
   population: { eyebrow: "POPULATION", title: "원주는 어떻게 움직이는가", summary: "행정동·연령·기간별 인구 변화 모듈입니다. 주민등록 인구 API가 연결되기 전까지 현재 인구를 추정하지 않습니다.", metrics: [["현재 인구", "UNAVAILABLE"], ["월간 변화", "UNAVAILABLE"], ["비교", "SCHEMA READY"]] },
   projects: { eyebrow: "WONJU NEXT", title: "도시의 다음 장면", summary: "공식 발표와 예산·사업 문서를 근거로 미래 변화를 추적합니다. 계획과 확정을 명확히 구분합니다.", metrics: [["계획", "LABELLED"], ["착공", "EVIDENCE"], ["완료", "VERIFIED"]] },
   air: { eyebrow: "AIR DESK", title: "원주의 공기", summary: "PM10·PM2.5를 제공자 시각과 함께 표시합니다. 관측 실패를 0으로 처리하지 않습니다.", metrics: [["PM10", "LIVE WHEN VALID"], ["PM2.5", "LIVE WHEN VALID"], ["권고", "GRADE-BASED"]] },
@@ -78,7 +81,7 @@ const PAGE_INFO: Record<string, { eyebrow: string; title: string; summary: strin
 };
 
 function weatherLabel(code: number | null) {
-  if (code === null) return "날씨 확인 중";
+  if (code === null) return "—";
   if (code === 0) return "맑음";
   if (code <= 3) return "구름 많음";
   if (code <= 48) return "안개";
@@ -180,13 +183,81 @@ function MapPanel({ map, news = [], compact = false }: { map: CitySnapshot["map"
   );
 }
 
+let warmCitySnapshot: CitySnapshot | null = null;
+let pendingCitySnapshot: Promise<CitySnapshot> | null = null;
+
+function requestCitySnapshot(): Promise<CitySnapshot> {
+  if (pendingCitySnapshot) return pendingCitySnapshot;
+  pendingCitySnapshot = fetch("/api/city", { headers: { Accept: "application/json" } })
+    .then((response) => {
+      if (!response.ok) throw new Error("city feed unavailable");
+      return response.json() as Promise<CitySnapshot>;
+    })
+    .then((data) => {
+      warmCitySnapshot = data;
+      try { window.sessionStorage.setItem(CITY_SNAPSHOT_STORAGE_KEY, serializeCitySnapshot(data)); } catch { /* storage may be disabled */ }
+      return data;
+    })
+    .finally(() => { pendingCitySnapshot = null; });
+  return pendingCitySnapshot;
+}
+
+type StationBoardItem = { label: string; value: string; detail: string; href?: string };
+
+function StationBoard({ items, urgent }: { items: StationBoardItem[]; urgent: StationBoardItem | null }) {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const visibleItems = urgent ? [urgent] : items;
+  const item = visibleItems[index % Math.max(visibleItems.length, 1)];
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updateMotion = () => setReducedMotion(media.matches);
+    const updateVisibility = () => setHidden(document.hidden);
+    updateMotion();
+    updateVisibility();
+    media.addEventListener("change", updateMotion);
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => { media.removeEventListener("change", updateMotion); document.removeEventListener("visibilitychange", updateVisibility); };
+  }, []);
+  useEffect(() => {
+    if (urgent || paused || hidden || reducedMotion || visibleItems.length < 2) return;
+    const timer = window.setInterval(() => setIndex((value) => nextRotatingIndex(value, visibleItems.length)), 10_000);
+    return () => window.clearInterval(timer);
+  }, [hidden, paused, reducedMotion, urgent, visibleItems.length]);
+  if (!item) return null;
+  const body = <><span>{item.label}</span><strong>{item.value}</strong><small>{item.detail}</small></>;
+  return (
+    <section className={`station-board ${urgent ? "station-board--urgent" : ""}`} aria-label="지금 원주 안내판" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)} onFocusCapture={() => setPaused(true)} onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}>
+      <div className="station-board-copy" aria-live="off">{item.href ? <a href={item.href}>{body}</a> : body}</div>
+      {!urgent && visibleItems.length > 1 ? <div className="station-board-controls"><button type="button" onClick={() => setIndex((value) => nextRotatingIndex(value, visibleItems.length, -1))} aria-label="이전 원주 정보">←</button><span>{index % visibleItems.length + 1} / {visibleItems.length}</span><button type="button" onClick={() => setIndex((value) => nextRotatingIndex(value, visibleItems.length))} aria-label="다음 원주 정보">→</button></div> : null}
+    </section>
+  );
+}
+
 export function StationApp({ route }: { route: string }) {
-  const [snapshot, setSnapshot] = useState<CitySnapshot>(UNAVAILABLE_SNAPSHOT);
+  const [snapshot, setSnapshot] = useState<CitySnapshot>(() => {
+    if (warmCitySnapshot) return warmCitySnapshot;
+    if (typeof window === "undefined") return UNAVAILABLE_SNAPSHOT;
+    try {
+      const stored = parseStoredCitySnapshot(window.sessionStorage.getItem(CITY_SNAPSHOT_STORAGE_KEY));
+      if (stored) warmCitySnapshot = stored;
+      return stored ?? UNAVAILABLE_SNAPSHOT;
+    } catch {
+      return UNAVAILABLE_SNAPSHOT;
+    }
+  });
+  const [hydrating, setHydrating] = useState(snapshot === UNAVAILABLE_SNAPSHOT);
+  const [currentRoute, setCurrentRoute] = useState(route);
   const [now, setNow] = useState<Date | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("light");
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [tmiIndex, setTmiIndex] = useState(0);
+  const [randomPlaceIndex, setRandomPlaceIndex] = useState<number | null>(null);
+  const [populationView, setPopulationView] = useState<"population" | "households" | "change" | "split">("population");
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -203,22 +274,30 @@ export function StationApp({ route }: { route: string }) {
       const fixture = controlledAlert === "emergency" ? { level: 4 as const, label: "EMERGENCY" as const, title: "통제된 비상 UI 시험" } : controlledAlert === "warning" ? { level: 3 as const, label: "WARNING" as const, title: "통제된 경고 UI 시험" } : { level: 0 as const, label: "NORMAL" as const, title: null };
       return { ...data, alerts: { ...data.alerts, ...fixture, provider: "CONTROLLED TEST FIXTURE", status: "FRESH", fetchedAt: new Date().toISOString(), detail: "개발 환경에서만 활성화되는 시각 검증 상태" } };
     };
-    fetch("/api/city")
-      .then((response) => {
-        if (!response.ok) throw new Error("city feed unavailable");
-        return response.json() as Promise<CitySnapshot>;
-      })
+    const refresh = () => requestCitySnapshot()
       .then((data) => { if (active) setSnapshot(withControlledAlert(data)); })
-      .catch(() => { /* the explicit unavailable snapshot remains visible */ });
-    return () => { active = false; };
+      .catch(() => { /* keep the most recent verified snapshot */ })
+      .finally(() => { if (active) setHydrating(false); });
+    void refresh();
+    const interval = window.setInterval(refresh, CITY_REFRESH_INTERVAL_MS);
+    const onVisibility = () => { if (!document.hidden) void refresh(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { active = false; window.clearInterval(interval); document.removeEventListener("visibilitychange", onVisibility); };
+  }, []);
+
+  useEffect(() => {
+    const onPopState = () => setCurrentRoute(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  const routeKey = route.split("/").filter(Boolean)[0] ?? "now";
-  const selectedDistrict = decodeURIComponent(route.split("/").filter(Boolean)[1] ?? "무실동");
+  const routePath = currentRoute.split(/[?#]/)[0];
+  const routeKey = routePath.split("/").filter(Boolean)[0] ?? "now";
+  const selectedDistrict = decodeURIComponent(routePath.split("/").filter(Boolean)[1] ?? "무실동");
   const pulse = pulseScore({
     activeNotices: snapshot.notices.items.length,
     precipitationProbability: snapshot.weather.precipitationProbability,
@@ -233,6 +312,33 @@ export function StationApp({ route }: { route: string }) {
       ...NAV.map(([href, title]) => ({ title, meta: "WONJU STATION", href })),
     ].filter((item) => `${item.title} ${item.meta}`.toLocaleLowerCase("ko-KR").includes(normalized)).slice(0, 8);
   }, [query, snapshot.notices.items]);
+
+  function handleInternalNavigation(event: ReactMouseEvent<HTMLDivElement>) {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const anchor = (event.target as HTMLElement).closest<HTMLAnchorElement>("a[href]");
+    if (!anchor || anchor.target || anchor.hasAttribute("download")) return;
+    const path = internalStationPath(anchor.href, window.location.origin);
+    if (!path) return;
+    event.preventDefault();
+    if (path !== `${window.location.pathname}${window.location.search}${window.location.hash}`) window.history.pushState({}, "", path);
+    setCurrentRoute(path);
+    setMenuOpen(false);
+    setQuery("");
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  const currentTmi = WONJU_TMI[tmiIndex % WONJU_TMI.length];
+  const boardItems = useMemo<StationBoardItem[]>(() => [
+    ...(snapshot.weather.temperature === null ? [] : [{ label: "지금 원주", value: `${formatValue(snapshot.weather.temperature, "°")} · ${weatherLabel(snapshot.weather.weatherCode)}`, detail: `체감 ${formatValue(snapshot.weather.apparentTemperature, "°")}`, href: "/weather" }]),
+    ...(snapshot.air.grade === null ? [] : [{ label: "오늘의 공기", value: snapshot.air.grade, detail: `PM2.5 ${formatValue(snapshot.air.pm25)}㎍/㎥`, href: "/air" }]),
+    ...(snapshot.notices.items.length ? [{ label: "새로 올라온 소식", value: `${snapshot.notices.items.length}건`, detail: snapshot.notices.items[0]?.title ?? "원주 소식", href: "/news" }] : []),
+    { label: "이번 주 행사", value: `${VERIFIED_EVENTS.length}건`, detail: "공식 링크로 확인한 일정", href: "/events" },
+    ...(snapshot.population.population === null ? [] : [{ label: "원주 인구", value: `${snapshot.population.population.toLocaleString("ko-KR")}명`, detail: snapshot.population.period ?? "최근 확인값", href: "/stats" }]),
+    { label: "원주 TMI", value: "알고 보면 더 재밌는 원주", detail: currentTmi.text, href: currentTmi.relatedRoute ?? "/history" },
+  ], [currentTmi, snapshot]);
+  const urgentBoardItem = snapshot.alerts.level !== null && snapshot.alerts.level >= 3
+    ? { label: `원주 ${snapshot.alerts.label}`, value: snapshot.alerts.title ?? "기상특보", detail: "다른 정보보다 먼저 확인해 주세요", href: snapshot.alerts.sourceUrl }
+    : null;
 
   function renderHome() {
     return (
@@ -249,6 +355,8 @@ export function StationApp({ route }: { route: string }) {
           </div>
         </section>
 
+        <StationBoard items={boardItems} urgent={urgentBoardItem} />
+
         <section className="home-metrics" aria-label="오늘의 원주 요약">
           <article className="weather-summary">
             <div className="metric-label"><span>날씨</span><FreshnessBadge status={snapshot.weather.status} /></div>
@@ -263,8 +371,8 @@ export function StationApp({ route }: { route: string }) {
           </article>
           <article className="metric-card">
             <div className="metric-label"><span>오늘의 공기</span><small>PM2.5</small></div>
-            <strong>{snapshot.air.grade ?? "확인 중"}</strong>
-            <p>{snapshot.air.pm25 === null ? "측정값을 불러오고 있어요" : `${formatValue(snapshot.air.pm25)}㎍/㎥`}</p>
+            <strong>{snapshot.air.grade ?? "—"}</strong>
+            <p>{snapshot.air.pm25 === null ? (hydrating ? "첫 정보를 확인하고 있어요" : "현재 측정값이 없어요") : `${formatValue(snapshot.air.pm25)}㎍/㎥`}</p>
             <a href="/air">자세히 보기 →</a>
           </article>
           <article className="metric-card metric-card--news">
@@ -310,6 +418,11 @@ export function StationApp({ route }: { route: string }) {
           <div className="district-shortcuts">{FEATURED_DISTRICTS.map((district) => <a href={`/place/${encodeURIComponent(district)}`} key={district}>{district}<span>→</span></a>)}</div>
         </section>
 
+        <section className="tmi-card" aria-label="원주 TMI">
+          <div><span className="kicker">WONJU TMI · {currentTmi.topic.toUpperCase()}</span><h2>원주 TMI</h2><p>{currentTmi.text}</p><a href={currentTmi.sourceUrl} target="_blank" rel="noreferrer">{currentTmi.sourceLabel} ↗</a></div>
+          <button type="button" onClick={() => setTmiIndex((value) => nextRotatingIndex(value, WONJU_TMI.length))}>다른 이야기 →</button>
+        </section>
+
         <section className="home-lower-grid">
           <div className="home-panel map-card"><SectionHead kicker="AROUND WONJU" title="원주 지도" link="/map" /><MapPanel map={snapshot.map} compact /></div>
           <div className="home-side-stack">
@@ -323,6 +436,7 @@ export function StationApp({ route }: { route: string }) {
               <strong className="pulse-score">{pulse ?? "—"}<small>/ 100</small></strong>
               <div className="pulse-bar"><span style={{ width: `${pulse ?? 0}%` }} /></div>
               <p>날씨·공기·공식 업데이트를 조합한 비공식 실험 지표예요.</p>
+              <details><summary>무엇이 반영됐나요?</summary><p>최근 공식 소식 수, 비 올 확률, PM2.5 값을 같은 규칙으로 조합했어요. 도시의 좋고 나쁨을 평가하는 점수는 아니에요.</p></details>
             </article>
           </div>
         </section>
@@ -344,14 +458,14 @@ export function StationApp({ route }: { route: string }) {
 
   function renderWeather() {
     return (
-      <PageShell eyebrow="HYPERLOCAL WEATHER" title="원주의 하늘은 하나가 아니다" intro="공식 KMA 키가 연결되면 읍면동 격자 예보를 우선합니다. 현재는 원주 중심 좌표의 명시적 보조 피드를 보여주며, 동네별 값을 복제하지 않습니다.">
+      <PageShell eyebrow="WONJU WEATHER" title="지금 원주의 하늘" intro="오늘 기온과 비 올 확률, 습도와 바람을 한눈에 보세요. 동네별 예보가 없는 곳에는 원주 전체 값을 억지로 복사하지 않아요.">
         <div className="weather-dashboard">
           <article className="weather-primary"><span>NOW · WONJU</span><strong>{formatValue(snapshot.weather.temperature, "°")}</strong><h2>{weatherLabel(snapshot.weather.weatherCode)}</h2><p>체감 {formatValue(snapshot.weather.apparentTemperature, "°")} · 습도 {formatValue(snapshot.weather.humidity, "%")} · 바람 {formatValue(snapshot.weather.windSpeed, " km/h")}</p></article>
           <article className="sun-card"><span>SUN CYCLE</span><div><b>{formatTime(snapshot.weather.sunrise)}</b><small>일출</small></div><div><b>{formatTime(snapshot.weather.sunset)}</b><small>일몰</small></div></article>
           <div className="hourly-chart">
             {snapshot.weather.hourly.length ? snapshot.weather.hourly.map((hour) => (
               <div key={hour.time}><span>{formatTime(hour.time)}</span><i style={{ height: `${Math.max(20, hour.precipitationProbability)}%` }} /><strong>{formatValue(hour.temperature, "°")}</strong><small>{hour.precipitationProbability}%</small></div>
-            )) : <Unavailable title="시간별 예보 없음" detail="제공자 응답을 기다리고 있습니다." />}
+            )) : <Unavailable title="시간별 예보를 볼 수 없어요" detail="현재 확인된 오늘 날씨는 위에서 볼 수 있어요." />}
           </div>
         </div>
         <SectionHead index="W" kicker="DISTRICT MATRIX" title="25개 읍면동" />
@@ -362,13 +476,13 @@ export function StationApp({ route }: { route: string }) {
 
   function renderNews() {
     return (
-      <PageShell eyebrow="WONJU NEWS" title="같은 사건은 하나의 이야기로" intro="원주시 공식 새소식과 Naver 지역 뉴스를 독립적으로 연결하고, 같은 사건은 하나의 묶음으로 정리합니다. 기사 본문은 복제하지 않습니다.">
+      <PageShell eyebrow="WONJU NEWS" title="원주에서 새로 올라온 소식" intro="원주시 새소식과 지역 뉴스를 함께 모았어요. 같은 내용은 한곳에 묶고, 자세한 내용은 원문에서 확인할 수 있어요.">
         <div className="filter-rail"><button className="active">전체</button><button>행정</button><button>생활</button><button>문화</button><button>교통</button><span>{snapshot.notices.items.length} CLUSTERS · MAP {snapshot.notices.coverage.geolocated}/{snapshot.notices.coverage.eligible}</span></div>
         <div className="news-provider-strip">{snapshot.notices.providers.map((provider) => <div key={provider.key}><FreshnessBadge status={provider.status} /><strong>{provider.provider}</strong><span>{provider.detail}</span></div>)}</div>
         <div className="news-board">
           {snapshot.notices.items.length ? snapshot.notices.items.map((item, index) => (
             <article key={item.id}><span>{String(index + 1).padStart(2, "0")}</span><div><small>{item.sources?.map((source) => source.label).join(" + ") ?? item.department}{item.location ? ` · ${item.location.label}${item.location.approximate ? " (근사)" : ""}` : ""}</small><h2>{item.title}</h2><p>{item.summary ?? "원문에서 세부 내용과 첨부자료를 확인하세요."}</p><div className="news-source-links">{(item.sources ?? [{ label: item.department, url: item.canonicalUrl, provider: item.provider ?? "WONJU_CITY" }]).map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.label} ↗</a>)}</div></div><time>{item.publishedAt}</time></article>
-          )) : <Unavailable title="공식 새소식 피드 점검 중" detail="실패를 빈 기사나 가짜 뉴스로 대체하지 않습니다." href={snapshot.notices.sourceUrl} />}
+          )) : <Unavailable title="새소식을 가져오지 못했어요" detail="원주시 공식 새소식은 바로 열어볼 수 있어요." href={snapshot.notices.sourceUrl} />}
         </div>
       </PageShell>
     );
@@ -376,7 +490,7 @@ export function StationApp({ route }: { route: string }) {
 
   function renderMap() {
     return (
-      <PageShell eyebrow="WONJU LIVE MAP" title="도시는 지도 위에서 이해된다" intro="명시된 읍면동을 확인한 뉴스만 근사 위치로 구분합니다. 위치가 불명확한 뉴스는 유효한 뉴스로 남되 지도에는 표시하지 않습니다.">
+      <PageShell eyebrow="WONJU LIVE MAP" title="지도에서 만나는 원주" intro="동네 이름이 분명한 소식만 지도에 표시해요. 위치가 불확실한 소식은 뉴스에는 남겨두되 지도에 억지로 찍지 않습니다.">
         <div className="map-tools"><button className="active">BASE</button><button>NEWS · {snapshot.notices.coverage.geolocated}</button><button>EVENTS · 0</button><button>AIR · 1</button><button>WEATHER · 1</button><span>NEWS COVERAGE: {snapshot.notices.coverage.percentage ?? "—"}%</span></div>
         <MapPanel map={snapshot.map} news={snapshot.notices.items} />
         <div className="map-legend"><div><i className="legend-dot legend-dot--lime" /><b>대기 관측</b><span>원주 중심 또는 공식 측정소</span></div><div><i className="legend-dot legend-dot--blue" /><b>날씨</b><span>도시 대표 격자</span></div><div><i className="legend-dot" /><b>뉴스</b><span>{snapshot.notices.coverage.geolocated ? "기사에 명시된 읍면동의 근사 위치" : "검증 가능한 위치 없음"}</span></div></div>
@@ -398,7 +512,7 @@ export function StationApp({ route }: { route: string }) {
     });
 
     return (
-      <PageShell eyebrow="EVENTS & CALENDAR" title="오늘 원주에서 무슨 일이 열리나" intro="날짜·장소·주최·공식 링크가 모두 확인된 행사만 표시합니다. 자동 수집을 가장하지 않고, 공식 행사 중 직접 검증한 일정과 원문을 제공합니다.">
+      <PageShell eyebrow="EVENTS & CALENDAR" title="오늘 원주에서 뭐 하지?" intro="날짜와 장소, 공식 안내를 확인할 수 있는 행사만 모았어요. 방문 전 원문에서 변동 사항을 한 번 더 확인해 주세요.">
         <div className="date-strip">{eventDays.map((day, index) => <div className={index === 0 ? "active" : ""} key={`${index}-${day.date}-${day.label}`}><strong>{day.date}</strong><span>{day.label}</span></div>)}</div>
         <div className="event-list">{VERIFIED_EVENTS.map((event, index) => <a href={event.source} target="_blank" rel="noreferrer" key={event.title}><span>{String(index + 1).padStart(2, "0")}</span><time>{event.date}<small>{event.time}</small></time><div><small>{event.place}</small><h2>{event.title}</h2></div><b>VERIFIED ↗</b></a>)}</div>
         <div className="link-cards"><a href="https://www.wonju.go.kr/www/sub.do?key=213" target="_blank" rel="noreferrer"><span>01</span><strong>원주시 문화행사</strong><small>공식 일정 열기 ↗</small></a><a href="https://www.wonju.go.kr/tour/index.do" target="_blank" rel="noreferrer"><span>02</span><strong>원주관광</strong><small>공식 관광 정보 ↗</small></a></div>
@@ -409,7 +523,7 @@ export function StationApp({ route }: { route: string }) {
   function renderDistrict() {
     const valid = DISTRICTS.includes(selectedDistrict);
     return (
-      <PageShell eyebrow="NEIGHBORHOOD DESK" title={valid ? selectedDistrict : "동네를 찾을 수 없습니다"} intro="날씨·뉴스·행사·시설을 동네 단위로 묶는 대시보드입니다. 도시 대표값을 동네값처럼 복제하지 않습니다.">
+      <PageShell eyebrow="NEIGHBORHOOD DESK" title={valid ? selectedDistrict : "동네를 찾을 수 없습니다"} intro="우리 동네 이름이 분명하게 담긴 소식과 정보를 모아요. 원주 전체 값을 동네의 값인 것처럼 보여주지는 않습니다.">
         <div className="district-hero"><div><span>WEATHER</span><strong>—</strong><small>도시값을 동네값으로 복제하지 않음</small></div><div><span>NEWS MAP</span><strong>{snapshot.notices.items.filter((item) => item.location?.district === selectedDistrict).length}</strong><small>명시 위치 기사</small></div><div><span>EVENTS</span><strong>0</strong><small>검증 일정</small></div><div><span>STATUS</span><strong>{snapshot.alerts.label}</strong><small>기상청 특보 기준</small></div></div>
         <div className="district-switcher">{DISTRICTS.map((district) => <a className={district === selectedDistrict ? "active" : ""} href={`/place/${encodeURIComponent(district)}`} key={district}>{district}</a>)}</div>
       </PageShell>
@@ -427,7 +541,14 @@ export function StationApp({ route }: { route: string }) {
       const population = snapshot.population.population;
       const maleShare = population && snapshot.population.male ? snapshot.population.male / population * 100 : 0;
       const femaleShare = population && snapshot.population.female ? snapshot.population.female / population * 100 : 0;
-      return <PageShell eyebrow={routeKey === "population" ? "POPULATION" : "CITY STATISTICS"} title="수치에는 기준일이 있다" intro="원주통계정보의 최신 월별 게시물을 서버에서 읽어 숫자와 기준일을 함께 제공합니다. 파싱에 실패하면 이전값을 현재처럼 노출하지 않습니다."><div className="population-hero"><span>{snapshot.population.period ?? "LATEST VERIFIED PERIOD"}</span><strong>{population?.toLocaleString("ko-KR") ?? "—"}<small>명 · 외국인 제외</small></strong><p>전월 대비 {snapshot.population.populationChange === null ? "—" : `${snapshot.population.populationChange > 0 ? "+" : ""}${snapshot.population.populationChange.toLocaleString("ko-KR")}명`}</p></div><div className="population-bars"><div><span>남성 {snapshot.population.male?.toLocaleString("ko-KR") ?? "—"}</span><i><b style={{ width: `${maleShare}%` }} /></i><strong>{maleShare ? `${maleShare.toFixed(1)}%` : "—"}</strong></div><div><span>여성 {snapshot.population.female?.toLocaleString("ko-KR") ?? "—"}</span><i><b style={{ width: `${femaleShare}%` }} /></i><strong>{femaleShare ? `${femaleShare.toFixed(1)}%` : "—"}</strong></div></div><ProviderLine label={snapshot.population.provider} status={snapshot.population.status} time={snapshot.population.fetchedAt} href={snapshot.population.sourceUrl} /></PageShell>;
+      const views = {
+        population: { value: population?.toLocaleString("ko-KR") ?? "—", suffix: "명 · 외국인 제외", detail: `전월 대비 ${snapshot.population.populationChange === null ? "—" : `${snapshot.population.populationChange > 0 ? "+" : ""}${snapshot.population.populationChange.toLocaleString("ko-KR")}명`}` },
+        households: { value: snapshot.population.households?.toLocaleString("ko-KR") ?? "—", suffix: "세대", detail: `전월 대비 ${snapshot.population.householdChange === null ? "—" : `${snapshot.population.householdChange > 0 ? "+" : ""}${snapshot.population.householdChange.toLocaleString("ko-KR")}세대`}` },
+        change: { value: snapshot.population.populationChange === null ? "—" : `${snapshot.population.populationChange > 0 ? "+" : ""}${snapshot.population.populationChange.toLocaleString("ko-KR")}`, suffix: "명 · 전월 대비", detail: snapshot.population.period ?? "최근 월별 현황" },
+        split: { value: maleShare ? `${maleShare.toFixed(1)} / ${femaleShare.toFixed(1)}` : "—", suffix: "% · 남 / 여", detail: "주민등록 인구 기준" },
+      } as const;
+      const view = views[populationView];
+      return <PageShell eyebrow={routeKey === "population" ? "POPULATION" : "CITY STATISTICS"} title="숫자로 보는 원주" intro="원주통계정보의 최근 월별 현황을 기준일과 함께 보여드려요. 궁금한 항목을 눌러 바꿔볼 수 있어요."><div className="population-tabs" role="group" aria-label="인구 통계 항목">{([['population','인구'],['households','세대'],['change','월 변화'],['split','남녀 비율']] as const).map(([key,label]) => <button type="button" className={populationView === key ? "active" : ""} onClick={() => setPopulationView(key)} key={key}>{label}</button>)}</div><div className="population-hero"><span>{snapshot.population.period ?? "최근 확인값"}</span><strong>{view.value}<small>{view.suffix}</small></strong><p>{view.detail}</p></div><div className="population-bars"><div><span>남성 {snapshot.population.male?.toLocaleString("ko-KR") ?? "—"}</span><i><b style={{ width: `${maleShare}%` }} /></i><strong>{maleShare ? `${maleShare.toFixed(1)}%` : "—"}</strong></div><div><span>여성 {snapshot.population.female?.toLocaleString("ko-KR") ?? "—"}</span><i><b style={{ width: `${femaleShare}%` }} /></i><strong>{femaleShare ? `${femaleShare.toFixed(1)}%` : "—"}</strong></div></div><ProviderLine label={snapshot.population.provider} status={snapshot.population.status} time={snapshot.population.fetchedAt} href={snapshot.population.sourceUrl} /></PageShell>;
     }
     if (routeKey === "history" || routeKey === "timeline" || routeKey === "people") {
       return <PageShell eyebrow="CITY ARCHIVE" title="시간 위에 세워진 원주" intro="원주시 연혁과 원주시역사박물관의 공식 설명을 짧게 재구성했습니다. 해석을 덧붙이기보다 출처로 돌아갈 수 있게 합니다."><div className="timeline">{HISTORY_TIMELINE.map((item) => <article key={item.year}><strong>{item.year}</strong><div><h2>{item.title}</h2><p>{item.text}</p></div></article>)}</div><a className="source-block" href="https://www.wonju.go.kr/www/contents.do?key=231" target="_blank" rel="noreferrer"><span>PRIMARY SOURCE</span><strong>원주시 공식 연혁 전체 보기 ↗</strong></a><SectionHead index="P" kicker="PEOPLE OF WONJU" title="도시를 만든 사람들" /><div className="people-grid">{HISTORICAL_PEOPLE.map((person) => <a href={person.source} target="_blank" rel="noreferrer" key={person.name}><span>{person.label}</span><h2>{person.name}</h2><p>{person.text}</p><b>공식 자료 ↗</b></a>)}</div></PageShell>;
@@ -436,7 +557,8 @@ export function StationApp({ route }: { route: string }) {
       return <PageShell eyebrow="MOBILITY" title="원주 이동의 공식 출발점" intro="실시간 도착 시간을 추정하지 않습니다. 원주시 교통정보센터와 원주관광의 공식 운행 정보로 바로 연결합니다."><div className="transport-grid"><a href="https://its.wonju.go.kr/" target="_blank" rel="noreferrer"><span>01 · LIVE TRAFFIC</span><h2>원주시 교통정보센터</h2><p>도로 소통, 버스 정보와 주차장 현황</p><b>OPEN ↗</b></a><a href="https://its.wonju.go.kr/parking/comm.do" target="_blank" rel="noreferrer"><span>02 · PARKING</span><h2>공영주차장</h2><p>주소와 주차면을 확인하는 공식 목록</p><b>OPEN ↗</b></a><a href="https://www.wonju.go.kr/tour/contents.do?key=6509" target="_blank" rel="noreferrer"><span>03 · CITY TOUR</span><h2>순환형 시티투어</h2><p>운행일, 요금과 정류장 시간표</p><b>OPEN ↗</b></a></div></PageShell>;
     }
     if (routeKey === "discover" || routeKey === "lost") {
-      return <PageShell eyebrow={routeKey === "lost" ? "LOST IN WONJU" : "WEEKEND DESK"} title={routeKey === "lost" ? "우연에도 출처가 필요하다" : "이번 주말, 원주 어디로 갈까"} intro="원주관광과 시립 시설 페이지에서 주소와 운영 정보가 확인된 장소만 제안합니다. 방문 전 원문에서 휴무와 현장 상황을 다시 확인하세요."><div className="place-grid">{VERIFIED_PLACES.map((place, index) => <a href={place.source} target="_blank" rel="noreferrer" key={place.name}><span>{String(index + 1).padStart(2, "0")} · {place.district}</span><h2>{place.name}</h2><p>{place.note}</p><small>{place.address}</small><b>공식 정보 ↗</b></a>)}</div></PageShell>;
+      const randomPlace = randomPlaceIndex === null ? null : VERIFIED_PLACES[randomPlaceIndex];
+      return <PageShell eyebrow={routeKey === "lost" ? "LOST IN WONJU" : "WEEKEND DESK"} title="이번 주말, 원주 어디로 갈까" intro="주소와 방문 정보를 공식 페이지에서 확인할 수 있는 곳만 골랐어요. 결정을 못 하겠다면 한 곳을 가볍게 뽑아보세요."><div className="random-wonju"><div><span className="kicker">RANDOM WONJU</span><h2>{randomPlace ? randomPlace.name : "오늘은 어디로 가볼까요?"}</h2><p>{randomPlace ? `${randomPlace.address} · ${randomPlace.note}` : "버튼을 누를 때만 검증된 장소 중 한 곳을 골라드려요."}</p>{randomPlace ? <a href={randomPlace.source} target="_blank" rel="noreferrer">공식 정보 열기 ↗</a> : null}</div><button type="button" onClick={() => setRandomPlaceIndex((value) => nextRotatingIndex(value ?? -1, VERIFIED_PLACES.length))}>원주 한 곳 뽑기</button></div><div className="place-grid">{VERIFIED_PLACES.map((place, index) => <a href={place.source} target="_blank" rel="noreferrer" key={place.name}><span>{String(index + 1).padStart(2, "0")} · {place.district}</span><h2>{place.name}</h2><p>{place.note}</p><small>{place.address}</small><b>공식 정보 ↗</b></a>)}</div><aside className="related-tmi"><span>이 근처 이야기</span><p>{WONJU_TMI.find((item) => item.topic === "place")?.text}</p></aside></PageShell>;
     }
     if (routeKey === "projects") {
       return <PageShell eyebrow="WONJU NEXT" title="도시의 다음 장면" intro="계획과 완료를 구분해 공식 발표만 기록합니다. 현재는 검증 가능한 대표 사업 하나를 시작점으로 제공합니다."><div className="project-feature"><span>PLAN · 2026</span><h2>공영주차장 1,042면 조성 추진</h2><p>원주시는 2026년 구도심과 주거 밀집 지역을 중심으로 공영주차장 조성을 계속 추진한다고 발표했습니다. ‘계획’ 상태이며 완료로 표시하지 않습니다.</p><a href="https://www.wonju.go.kr/media/selectBbsNttView.do?bbsNo=145&key=3450&nttNo=475645" target="_blank" rel="noreferrer">원주시 공식 보도자료 ↗</a></div></PageShell>;
@@ -449,19 +571,19 @@ export function StationApp({ route }: { route: string }) {
   const routeTitle = ({ now: "오늘의 원주", news: "원주 뉴스", weather: "원주 날씨", map: "원주 지도", events: "원주 행사", city: "도시 정보", history: "원주 이야기", discover: "원주 탐방", transport: "원주 교통", stats: "원주 통계", population: "원주 인구", air: "원주 대기질", projects: "오늘 달라진 원주", place: selectedDistrict } as Record<string, string>)[routeKey] ?? "WONJU STATION";
 
   return (
-    <div className="station-shell">
+    <div className="station-shell" onClick={handleInternalNavigation}>
       <aside id="station-sidebar" className={`sidebar ${menuOpen ? "sidebar--open" : ""}`}>
         <a className="brand" href="/"><span className="brand-mark"><i /><i /><i /></span><span><strong>WONJU<br />STATION</strong><small>원주 시민의 생활 홈</small></span></a>
         <div className="sidebar-today">
           <span>오늘의 원주</span>
           <strong>{formatValue(snapshot.weather.temperature, "°")} <small>{weatherLabel(snapshot.weather.weatherCode)}</small></strong>
-          <p>{snapshot.weather.status === "UNAVAILABLE" ? "날씨 정보를 확인하고 있어요" : `최고 ${formatValue(snapshot.weather.high, "°")} · 최저 ${formatValue(snapshot.weather.low, "°")}`}</p>
+          <p>{snapshot.weather.status === "UNAVAILABLE" ? "오늘 날씨는 잠시 비워둘게요" : `최고 ${formatValue(snapshot.weather.high, "°")} · 최저 ${formatValue(snapshot.weather.low, "°")}`}</p>
         </div>
         <nav className="side-nav" aria-label="주요 메뉴">
-          {NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><span>{group.label}</span>{group.items.map(([href, label, icon]) => <a className={(href === "/" ? routeKey === "now" : route.startsWith(href)) ? "active" : ""} href={href} key={href}><i aria-hidden="true">{icon}</i>{label}</a>)}</div>)}
+          {NAV_GROUPS.map((group) => <div className="nav-group" key={group.label}><span>{group.label}</span>{group.items.map(([href, label, icon]) => <a className={(href === "/" ? routeKey === "now" : routePath.startsWith(href)) ? "active" : ""} href={href} key={href}><i aria-hidden="true">{icon}</i>{label}</a>)}</div>)}
         </nav>
         <div className="sidebar-neighborhood"><span>원주 25개 읍면동</span><strong>우리 동네 찾기</strong><a href="/weather">동네 전체 보기 →</a></div>
-        <div className={`sidebar-status network-state--${snapshot.weather.status.toLowerCase()}`}><span className="live-dot" /><div><strong>{snapshot.weather.status === "UNAVAILABLE" ? "일부 정보 확인 중" : "원주 정보 연결됨"}</strong><small>출처와 업데이트 시간 공개</small></div></div>
+        <div className={`sidebar-status network-state--${snapshot.weather.status.toLowerCase()}`}><span className="live-dot" /><div><strong>{snapshot.weather.status === "UNAVAILABLE" ? "원주 생활 정보" : "원주 정보 연결됨"}</strong><small>{snapshot.weather.status === "UNAVAILABLE" ? "확인되는 값부터 보여드려요" : "출처와 업데이트 시간 공개"}</small></div></div>
       </aside>
 
       <div className="app-column">
@@ -500,5 +622,5 @@ function PageShell({ eyebrow, title, intro, children }: { eyebrow: string; title
 }
 
 function Unavailable({ title, detail, href }: { title: string; detail: string; href?: string }) {
-  return <div className="unavailable"><span>정보 확인 중</span><h3>{title}</h3><p>{detail}</p>{href ? <a href={href} target="_blank" rel="noreferrer">공식 페이지 열기 →</a> : null}</div>;
+  return <div className="unavailable"><span>잠시 안내</span><h3>{title}</h3><p>{detail}</p>{href ? <a href={href} target="_blank" rel="noreferrer">공식 페이지 열기 →</a> : null}</div>;
 }

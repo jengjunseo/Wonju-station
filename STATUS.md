@@ -1,55 +1,66 @@
-# WONJU STATION v1.3 status
+# WONJU STATION v1.4 status
 
 ## Product
 
-WONJU STATION is a responsive Wonju regional-life dashboard. It shows sourced weather, air quality, alerts, official and local news, map context, population, city information, events, districts, transport links, and history. Missing or failed data remains visibly unavailable instead of being guessed.
+WONJU STATION is a responsive, evidence-first Wonju life station. The v1.4 experience keeps the accepted visual system while making movement between pages immediate, retaining already verified city data, adding useful living panels, and using ordinary resident-facing Korean.
+
+## Navigation architecture
+
+The deployed vinext framework client-navigation path had historically thrown, so every internal anchor performed a full document request and recreated `StationApp`. v1.4 keeps semantic anchors and deep links but delegates same-origin navigation to one persistent shell using `history.pushState`; `popstate` keeps browser back/forward, URL, and visible route synchronized. External links and modified clicks retain native behavior.
+
+Local browser evidence for `/ → /news → /weather → /map → /events → /discover → /stats → /` showed URL/content synchronization with only the initial document request. Server logs showed no route-document requests during that sequence and no route-triggered `/api/city` request. Direct `/news`, `/weather`, `/stats`, and `/place/무실동` loads remained valid.
+
+## CitySnapshot refresh
+
+The shell owns one warm `CitySnapshot`. A module-level pending promise deduplicates concurrent `/api/city` work, refreshes every five minutes and when a hidden tab becomes visible, and never clears known data while refreshing. A validated/versioned `sessionStorage` copy has a ten-minute maximum age and preserves every original provider status and timestamp. `LOADING/HYDRATING` remains presentation state; provider `UNAVAILABLE` is not rewritten as loading or as live.
 
 ## Providers
 
-| Provider | Capability | Status | Required env | Notes |
-| --- | --- | --- | --- | --- |
-| Open-Meteo | Weather/forecast fallback | LIVE / FALLBACK | — | Used until KMA succeeds; bounded and validated. |
-| KMA VilageFcstInfoService | Weather/forecast | PENDING_CREDENTIAL | `KMA_SERVICE_KEY` | Apply for the short-range forecast API at data.go.kr. Failure stays isolated behind Open-Meteo. |
-| KMA WthrWrnInfoService | Explicit Wonju alerts | PENDING_CREDENTIAL | `KMA_SERVICE_KEY` | Missing or failed feed displays `CHECK`, never inferred `NORMAL`. |
-| Open-Meteo Air Quality | Air-quality fallback | LIVE / FALLBACK | — | Used until AirKorea succeeds. |
-| AirKorea | Official station PM10/PM2.5 | PENDING_CREDENTIAL | `AIRKOREA_SERVICE_KEY` | Apply for station and real-time pollution APIs at data.go.kr; provider approval may be required. |
-| Wonju City | Official notices | LIVE | — | Independent from Naver; current local smoke returned 8 clusters. |
-| Naver Search Open API | Local news | PENDING_CREDENTIAL | `NAVER_NEWS_CLIENT_ID`, `NAVER_NEWS_CLIENT_SECRET` | Precision query is `원주시`; stores title, summary, source and original link only. |
-| OpenStreetMap | Base map fallback | LIVE / FALLBACK | — | Remains available until Kakao Maps succeeds. |
-| Kakao Local REST API | News Map geocoding + structured chatbot place discovery | LIVE / FREE-ONLY | `KAKAO_REST_API_KEY` | `WONJU_PLACE` uses a Wonju-qualified keyword query, 20km bound, and address validation; only provider-supported place fields are returned. |
-| Kakao Maps JavaScript SDK | Base map | PENDING_CREDENTIAL | `NEXT_PUBLIC_KAKAO_MAP_KEY` | Provider-designated public key. Register `https://wonju-station-live.tsiba5021.chatgpt.site` as an allowed web domain. |
-| Gemini API + Google Search grounding | Five-mode Wonju assistant | LIVE / FREE-SEARCH CAPACITY DEPENDENT | `GEMINI_API_KEY` | `gemini-3.5-flash-lite` presents Station data and powers persona chat; `gemini-2.5-flash-lite` is isolated to the free-only `WONJU_WEB` Search lane. No paid fallback. |
-| Wonju statistics / city site | Population and city attribution | LIVE | — | Local certification returned a 2026년 7월말 population period and live city metadata. |
+| Provider | Capability | Current state | Notes |
+| --- | --- | --- | --- |
+| Open-Meteo | Weather/air fallbacks | LIVE / FALLBACK | Bounded existing fallback behavior is unchanged. |
+| KMA | Forecast and explicit alerts | CONFIGURED / FAIL-CLOSED | Sites secrets are present; unsuccessful alert reads remain `CHECK`, never inferred `NORMAL`. |
+| AirKorea | PM10/PM2.5 | CONFIGURED / FALLBACK AVAILABLE | Existing adapter and fallback policy are unchanged. |
+| Wonju City | Official notices/city facts | LIVE | Independent from Naver. |
+| Naver API HUB Search | Local news | API HUB MIGRATION READY | The old Developers endpoint/headers returned hosted `HTTP 401`. v1.4 uses `/search/v1/news` with API HUB headers while retaining the existing env names, normalization, dedupe, cache, timeout and title/summary-only policy. Final hosted smoke is required for the release state below. |
+| Kakao Local | Structured Wonju place search/geocoding | LIVE / FREE-ONLY | Existing bounded Wonju validation is unchanged. |
+| Kakao Maps / OpenStreetMap | Base map | CONFIGURED / OSM FALLBACK | Map SDK still loads only when a map surface renders. |
+| Gemini 3.5 Flash-Lite | Station/persona chat | CONFIGURED | Existing `/api/chat`, prompt boundary, rate limit and provider architecture remain bounded. |
+| Gemini 2.5 Flash-Lite + Google Search | `WONJU_WEB` | FAIL-CLOSED / DIAGNOSTIC READY | A 429 is no longer labelled daily exhaustion from status alone. Sanitized `QuotaFailure`/`RetryInfo` evidence is classified into daily, rate, token, grounding, zero-entitlement, model/tool, project, unknown-429, or unavailable states. No paid or ungrounded fallback. |
+| Wonju statistics/city site | Population and city attribution | LIVE | Values retain their published period. |
 
-`PUBLIC_DATA_SERVICE_KEY` remains an optional shared server-secret fallback for KMA and AirKorea.
+All named provider variables are present in the Sites environment; presence alone is not treated as live certification. Secrets are never returned by diagnostics.
 
-## Architecture
+## Google Search diagnosis
 
-`lib/providers.ts` owns bounded provider adapters and produces normalized domain data. Existing snapshot lanes remain unchanged; Kakao keyword place results are normalized separately and cached for five minutes. Before any provider/model call, `/api/chat` deterministically selects exactly one mode: `STATION` uses only the relevant Station snapshot and `gemini-3.5-flash-lite`; `WONJU_PLACE` calls only Kakao Local and renders structured place cards; `WONJU_WEB` calls only `gemini-2.5-flash-lite` with `google_search`; `CHAT` uses the 3.5 persona without a search tool; `OUT_OF_SCOPE` is declined without a provider or model call. Inputs, history, output, and the existing 5 requests/minute per-instance rate limit remain bounded. Station, Kakao, and web provenance are carried in structured response fields. Web Search quota and transient provider errors fail closed inside `WONJU_WEB` without disabling other modes.
+Official Gemini documentation confirms `gemini-2.5-flash-lite` and `google_search` support, free Search grounding capacity, and project-level RPM/TPM/RPD quota dimensions. Before v1.4 the code discarded the error body and mapped every HTTP 429 to `QUOTA_EXHAUSTED`, so the exact root cause could not be known and the resident message incorrectly claimed the daily allowance was spent. v1.4 preserves sanitized provider quota evidence and uses an honest generic connection message unless the response proves a narrower class. The release-state section records the final hosted classification.
 
-## Known gaps
+## TMI source model
 
-- Current credential-free News Map coverage is **0 / 8 eligible clusters (0%)**. This is honest partial coverage: no current official title named an 읍면동 and Kakao geocoding is not configured.
-- Naver, KMA and AirKorea live-provider certification awaits owner credentials/provider-console setup.
-- Station topics that are routed internally but not represented in the current normalized content model, including 조엄 and 장일순, fail closed with an explicit unavailable-grounding response and never fall through to web search.
-- Google documents a free Search grounding allowance for Gemini 2.5 Flash/Flash-Lite, shared at 500 requests per day on the free tier. `WONJU_WEB` never upgrades to paid usage; a 429 is an expected machine-readable provider state and is not retried.
-- Rate limiting is bounded per runtime instance, not distributed, because the MVP intentionally has no persistence service.
-- The deployed v1.2 build is public; unauthenticated access and the chatbot provider path were certified after deployment.
+`lib/content.ts` contains 24 durable Wonju TMI records spanning city history, Gangwon Gamyeong, literature, people, culture and official sights. Every record has an ID, topic, text, official source label/URL and optional related route. Sources are Wonju City, Wonju Tourism, Wonju History Museum and Wonju UNESCO City of Literature. The same bank powers the homepage TMI, Station Board, Discover/history context and server-supplied chatbot grounding; Gemini may not invent Station TMI.
 
-## Human next action
+## Dynamic station features
 
-Add any remaining provider credential values listed above, register the Sites URL in Kakao Developers, then redeploy.
+- Station Board rotates verified weather, air, news, events, population and TMI every ten seconds, with manual controls, hover/focus/hidden-tab pause and reduced-motion support. Warnings override rotation.
+- Homepage TMI offers a manual “다른 이야기” action with official provenance.
+- Population switches among population, households, month change and gender split without navigation.
+- WONJU PULSE explains its deterministic inputs and remains labelled experimental.
+- Discover provides user-triggered Random Wonju using only the bounded verified place set.
+- Existing weather, air, news, event, district, map and change cards keep useful link behavior.
+
+## Remaining real blockers
+
+- Google Search availability depends on the project quota/entitlement evidence returned by Google; no billing fallback is permitted.
+- Provider consoles can still reject configured credentials or domain permissions. Runtime smoke evidence, not secret presence, determines the final state.
+- Rate limiting remains per runtime instance because the product intentionally has no database or distributed rate service.
 
 ## Deployment
 
-- Visibility: public
-- URL: https://wonju-station-live.tsiba5021.chatgpt.site
-- Certification: full local test/type/lint/build/render checks and hosted five-mode user-flow checks are required for each release. Kakao place and free Search live status are reported separately because both depend on external quota capacity.
+- Branch: `main`
+- Public URL: https://wonju-station-live.tsiba5021.chatgpt.site
+- Starting SHA: `6418033af6b6ac7698035f413450c12d9fd0ed54`
+- Release source/final hosted evidence: recorded after the v1.4 Sites deployment.
 
 ## Release state
 
-- Release source: the Sites deployment is built from the repository `main` head recorded by the deployment version.
-- Date: 2026-08-12 (Asia/Seoul)
-- v1 → v1.1: added independent Naver news, cross-provider clustering, evidence-labelled News Map support, key-ready KMA/AirKorea/Kakao adapters, a grounded lazy-loaded Wonju assistant, bounded caching/rate controls, and final safety/performance certification while preserving the existing visual system and fallbacks.
-- v1.1 → v1.2: added the 꽁드리 persona, exact first-open greeting, deterministic four-mode routing, Station-only fail-closed grounding, Wonju-only Google Search grounding, structured provenance, and explicit ambiguous-question clarification without changing UI/CSS, provider adapters, or rate limits.
-- v1.2 → v1.3: added `WONJU_PLACE` with bounded Kakao Local keyword search and structured place cards, split `WONJU_WEB` onto `gemini-2.5-flash-lite`, and preserved 3.5-powered non-web modes with no paid search fallback.
+The final v1.4 candidate must pass targeted tests, full tests, typecheck, lint, production build, rendered-output tests, local desktop/deep-link flows, Sites deployment, hosted desktop/mobile navigation, Naver provider isolation/merge evidence, Google Search diagnostic smoke and chatbot flows before certification.
