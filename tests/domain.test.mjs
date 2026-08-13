@@ -201,6 +201,13 @@ test("classifies Google quota evidence instead of guessing from HTTP 429", () =>
   assert.equal(retry.retryDelay, "31s");
 });
 
+test("keeps successful but ungrounded web responses unavailable", () => {
+  const unavailable = webProviderFailure({ code: 200, classification: "UNAVAILABLE", errorStatus: "NO_GROUNDING_SOURCES", quotaMetric: null, quotaId: null, quotaDimensions: null, quotaValue: null, retryDelay: null });
+  assert.equal(unavailable.status, "UNAVAILABLE");
+  assert.equal(unavailable.code, 200);
+  assert.equal(unavailable.errorStatus, "NO_GROUNDING_SOURCES");
+});
+
 test("keeps the TMI bank verified and exposes it only as Station context", () => {
   assert.ok(WONJU_TMI.length >= 20);
   assert.ok(WONJU_TMI.every((item) => item.id && item.text && /^https:\/\//.test(item.sourceUrl) && item.sourceLabel));

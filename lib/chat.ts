@@ -364,6 +364,19 @@ export class GeminiRequestError extends Error {
   }
 }
 
+function successfulGroundingFailure(errorStatus: "NO_MODEL_TEXT" | "NO_GROUNDING_SOURCES"): GeminiRequestError {
+  return new GeminiRequestError(200, {
+    code: 200,
+    classification: "UNAVAILABLE",
+    errorStatus,
+    quotaMetric: null,
+    quotaId: null,
+    quotaDimensions: null,
+    quotaValue: null,
+    retryDelay: null,
+  });
+}
+
 const modelCheckCache = new Map<string, { available: boolean; expiresAt: number }>();
 
 export async function checkGeminiModel(apiKey: string, model = GEMINI_MODEL): Promise<boolean> {
@@ -407,9 +420,9 @@ export async function askGemini(question: string, context: GroundedContext | nul
     const data = await response.json();
     const rawText = extractGeminiText(data);
     const message = rawText ? stripModelProvenance(rawText) : null;
-    if (!message) throw new Error("Gemini returned no text");
+    if (!message) throw successfulGroundingFailure("NO_MODEL_TEXT");
     const sources = mode === "WONJU_WEB" ? extractGroundingSources(data) : [];
-    if (mode === "WONJU_WEB" && !sources.length) throw new Error("Gemini search grounding returned no sources");
+    if (mode === "WONJU_WEB" && !sources.length) throw successfulGroundingFailure("NO_GROUNDING_SOURCES");
     return { message, sources, searchUsed: mode === "WONJU_WEB" };
   } finally {
     clearTimeout(timeout);

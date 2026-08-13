@@ -22,18 +22,18 @@ The shell owns one warm `CitySnapshot`. A module-level pending promise deduplica
 | KMA | Forecast and explicit alerts | CONFIGURED / FAIL-CLOSED | Sites secrets are present; unsuccessful alert reads remain `CHECK`, never inferred `NORMAL`. |
 | AirKorea | PM10/PM2.5 | CONFIGURED / FALLBACK AVAILABLE | Existing adapter and fallback policy are unchanged. |
 | Wonju City | Official notices/city facts | LIVE | Independent from Naver. |
-| Naver API HUB Search | Local news | API HUB MIGRATION READY | The old Developers endpoint/headers returned hosted `HTTP 401`. v1.4 uses `/search/v1/news` with API HUB headers while retaining the existing env names, normalization, dedupe, cache, timeout and title/summary-only policy. Final hosted smoke is required for the release state below. |
+| Naver API HUB Search | Local news | LIVE | The old Developers endpoint/headers returned hosted `HTTP 401`. v1.4 uses `/search/v1/news` with API HUB headers while retaining the existing env names, normalization, dedupe, cache, timeout and title/summary-only policy. Hosted smoke returned 30 raw, 30 normalized, 12 provider-deduped and 8 post-merge contributing items. |
 | Kakao Local | Structured Wonju place search/geocoding | LIVE / FREE-ONLY | Existing bounded Wonju validation is unchanged. |
 | Kakao Maps / OpenStreetMap | Base map | CONFIGURED / OSM FALLBACK | Map SDK still loads only when a map surface renders. |
 | Gemini 3.5 Flash-Lite | Station/persona chat | CONFIGURED | Existing `/api/chat`, prompt boundary, rate limit and provider architecture remain bounded. |
-| Gemini 2.5 Flash-Lite + Google Search | `WONJU_WEB` | FAIL-CLOSED / DIAGNOSTIC READY | A 429 is no longer labelled daily exhaustion from status alone. Sanitized `QuotaFailure`/`RetryInfo` evidence is classified into daily, rate, token, grounding, zero-entitlement, model/tool, project, unknown-429, or unavailable states. No paid or ungrounded fallback. |
+| Gemini 2.5 Flash-Lite + Google Search | `WONJU_WEB` | FAIL-CLOSED / NO_GROUNDING_SOURCES | A 429 is no longer labelled daily exhaustion from status alone. Sanitized `QuotaFailure`/`RetryInfo` evidence is classified into daily, rate, token, grounding, zero-entitlement, model/tool, project, unknown-429, or unavailable states. Current hosted controlled requests returned successfully but without grounding sources, so answers stayed unavailable. No paid or ungrounded fallback. |
 | Wonju statistics/city site | Population and city attribution | LIVE | Values retain their published period. |
 
 All named provider variables are present in the Sites environment; presence alone is not treated as live certification. Secrets are never returned by diagnostics.
 
 ## Google Search diagnosis
 
-Official Gemini documentation confirms `gemini-2.5-flash-lite` and `google_search` support, free Search grounding capacity, and project-level RPM/TPM/RPD quota dimensions. Before v1.4 the code discarded the error body and mapped every HTTP 429 to `QUOTA_EXHAUSTED`, so the exact root cause could not be known and the resident message incorrectly claimed the daily allowance was spent. v1.4 preserves sanitized provider quota evidence and uses an honest generic connection message unless the response proves a narrower class. The release-state section records the final hosted classification.
+Official Gemini documentation confirms `gemini-2.5-flash-lite` and `google_search` support, free Search grounding capacity, and project-level RPM/TPM/RPD quota dimensions. Before v1.4 the code discarded the error body and mapped every HTTP 429 to `QUOTA_EXHAUSTED`, so the historical 429's exact quota dimension is irrecoverable and is classified `UNKNOWN_PROVIDER_429`, not daily exhaustion. On the v1.4 hosted candidate, three controlled `WONJU_WEB` requests did not reproduce 429; they returned without grounding sources and were fail-closed as `UNAVAILABLE / NO_GROUNDING_SOURCES`. v1.4 preserves any future sanitized provider quota evidence and uses an honest generic connection message unless the response proves a narrower class.
 
 ## TMI source model
 
@@ -50,7 +50,7 @@ Official Gemini documentation confirms `gemini-2.5-flash-lite` and `google_searc
 
 ## Remaining real blockers
 
-- Google Search availability depends on the project quota/entitlement evidence returned by Google; no billing fallback is permitted.
+- Google Search currently returns no grounding sources for controlled hosted requests. Historical 429 detail cannot be recovered because the old adapter discarded it; any future 429 will now retain sanitized quota evidence. No billing fallback is permitted.
 - Provider consoles can still reject configured credentials or domain permissions. Runtime smoke evidence, not secret presence, determines the final state.
 - Rate limiting remains per runtime instance because the product intentionally has no database or distributed rate service.
 
@@ -59,8 +59,8 @@ Official Gemini documentation confirms `gemini-2.5-flash-lite` and `google_searc
 - Branch: `main`
 - Public URL: https://wonju-station-live.tsiba5021.chatgpt.site
 - Starting SHA: `6418033af6b6ac7698035f413450c12d9fd0ed54`
-- Release source/final hosted evidence: recorded after the v1.4 Sites deployment.
+- Release source candidate: `a2d5dca34568f3d9f65489f88c6202a9ddddeea2` (Sites version 18); final documentation commit follows hosted certification.
 
 ## Release state
 
-The final v1.4 candidate must pass targeted tests, full tests, typecheck, lint, production build, rendered-output tests, local desktop/deep-link flows, Sites deployment, hosted desktop/mobile navigation, Naver provider isolation/merge evidence, Google Search diagnostic smoke and chatbot flows before certification.
+Sites version 18 deployed successfully. Naver is live-certified with 30 raw results, 30 normalized results, 12 after provider dedupe and 8 post-Wonju-City-merge contributions. Google web mode is fail-closed at `NO_GROUNDING_SOURCES`; Station, Kakao and normal persona lanes remain independent. Final validation and documentation are recorded by the following release commit/version.
