@@ -756,12 +756,27 @@ export function getMapConfiguration(): MapSnapshot {
 
 let citySnapshotCache: { value: CitySnapshot; expiresAt: number } | null = null;
 let citySnapshotPending: Promise<CitySnapshot> | null = null;
+let weatherSnapshotCache: { value: WeatherSnapshot; expiresAt: number } | null = null;
+let weatherSnapshotPending: Promise<WeatherSnapshot> | null = null;
+
+export async function getWeatherSnapshot(): Promise<WeatherSnapshot> {
+  if (weatherSnapshotCache && weatherSnapshotCache.expiresAt > Date.now()) return weatherSnapshotCache.value;
+  if (weatherSnapshotPending) return weatherSnapshotPending;
+  weatherSnapshotPending = fetchWeather();
+  try {
+    const value = await weatherSnapshotPending;
+    weatherSnapshotCache = { value, expiresAt: Date.now() + 2 * 60_000 };
+    return value;
+  } finally {
+    weatherSnapshotPending = null;
+  }
+}
 
 export async function getCitySnapshot(): Promise<CitySnapshot> {
   if (citySnapshotCache && citySnapshotCache.expiresAt > Date.now()) return citySnapshotCache.value;
   if (citySnapshotPending) return citySnapshotPending;
   citySnapshotPending = (async () => {
-    const [weather, air, notices, population, mayor, alerts] = await Promise.all([fetchWeather(), fetchAir(), fetchNotices(), fetchPopulation(), fetchMayor(), fetchAlerts()]);
+    const [weather, air, notices, population, mayor, alerts] = await Promise.all([getWeatherSnapshot(), fetchAir(), fetchNotices(), fetchPopulation(), fetchMayor(), fetchAlerts()]);
     const value = { generatedAt: new Date().toISOString(), weather, air, notices, population, mayor, alerts, map: getMapConfiguration() };
     citySnapshotCache = { value, expiresAt: Date.now() + 2 * 60_000 };
     return value;

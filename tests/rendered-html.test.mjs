@@ -12,7 +12,7 @@ async function render(pathname) {
   );
 }
 
-for (const [pathname, expected] of [["/", "WONJU NOW"], ["/weather", "WONJU WEATHER"], ["/map", "WONJU LIVE MAP"], ["/place/%EB%AC%B4%EC%8B%A4%EB%8F%99", "NEIGHBORHOOD DESK"]]) {
+for (const [pathname, expected] of [["/", "WONJU NOW"], ["/weather", "WONJU WEATHER"], ["/map", "WONJU PLACE MAP"], ["/place/%EB%AC%B4%EC%8B%A4%EB%8F%99", "원주의 장소를"]]) {
   test(`server-renders ${pathname}`, async () => {
     const response = await render(pathname);
     assert.equal(response.status, 200);
