@@ -8,5 +8,8 @@
 - `wonju-station.jpg`: Wonju Station, Trainholic, Wikimedia Commons, CC BY-SA 4.0. Source: https://commons.wikimedia.org/wiki/File:Wonju_Station.jpg
 - `wonju-landscape.jpg`: Wonju memorial photograph, Wikimedia Commons source recorded in the original asset intake. It is not mapped to a named attraction in Edition 02.
 - `wonju-map.png`: user-provided Wonju administrative district map supplied in the project request.
+- `park-kyungri-museum.jpg`: Park Kyung-ri Museum in Wonju, Youngjin, Wikimedia Commons, CC BY-SA 4.0. Source: https://commons.wikimedia.org/wiki/File:Park_Kyung_ri_Museum_01.jpg; resized for web delivery without changing the subject.
+- `wonju-free-market-aisle.jpg`: Wonju Free Market interior, Choi Kwang-mo, Wikimedia Commons, CC BY-SA. Source: https://commons.wikimedia.org/wiki/Category:Wonju_Free_Market; used as market context, not as a specific menu image.
+- `weather/*.svg`: Meteocons Fill icons from `@meteocons/svg@0.1.0`; reduced-motion fallbacks from `@meteocons/svg-static@0.1.0`. MIT License, Bas Milius. Source: https://github.com/basmilius/meteocons
 
 Named-attraction rule: no generic Wonju photograph is substituted for Sogeumsan Grand Valley, Hanji Theme Park, or Park Kyungni Literature Park. Those entries use a typographic place treatment until a place-specific, redistributable photograph is cleared.

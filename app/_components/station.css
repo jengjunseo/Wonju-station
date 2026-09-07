@@ -89,3 +89,48 @@
   .eat-intro-photo { margin-top: 34px; }.eat-intro-photo img { height: 260px; }.market-reading, .eat-search { display: block; padding: 62px 0; }.market-reading-head h2, .eat-search-copy h2 { font-size: 33px; }.market-reading-head > p:last-child, .eat-search-copy > p:not(.eyebrow) { font-size: 15px; }.market-choices { grid-template-columns: 1fr; margin-top: 28px; }.market-choices a { min-height: 235px; }.market-choices strong { margin-top: 42px; font-size: 25px; }.eat-search-box { margin-top: 30px; padding: 16px; }.search-form { display: grid; grid-template-columns: 1fr auto; }.search-form input { width: 100%; }.search-form button { padding: 0 14px; }.eat-ritual { padding-top: 55px; }.eat-ritual > div { grid-template-columns: 30px 1fr; gap: 12px; }.eat-ritual strong { font-size: 18px; }.courses-intro > p { margin-top: 25px; }.course-choices { grid-template-columns: 1fr; padding-top: 25px; }.course-choice { min-height: 460px; }.choice-photo-strip { height: 160px; }.course-choice h2 { font-size: 26px; }.course-principle { display: block; margin-top: 60px; }.course-principle strong { display: block; margin: 18px 0 25px; font-size: 24px; }.course-detail-page { display: block; padding: 48px 16px 90px; }.course-detail-intro h1 { font-size: 46px; }.course-detail-lede { font-size: 16px; }.course-meta-row { align-items: start; gap: 16px; font-size: 13px; }.journey-header { display: block; }.journey-header small { display: block; margin-top: 6px; }.journey-step { grid-template-columns: 28px 1fr; gap: 10px; padding-bottom: 62px; }.journey-step .place-photo { grid-column: 2; grid-row: 1; height: 210px; }.journey-copy { grid-column: 2; }.journey-copy h2 { font-size: 25px; }.journey-connector { left: 28px; }.journey-connector::before { width: 55px; }.course-meal { grid-template-columns: 1fr; gap: 10px; }.course-notes { margin-top: 45px; }
   .listing-page, .map-page { width: calc(100% - 32px); padding-top: 48px; padding-bottom: 90px; }.page-intro--split { display: block; padding-bottom: 36px; }.page-intro h1, .map-heading h1 { font-size: 48px; }.page-intro--split > p { margin-top: 25px; font-size: 15px; }.now-events, .official-notices { padding-top: 38px; }.section-heading h2 { font-size: 28px; }.now-event, .notice-row { grid-template-columns: 1fr auto; gap: 8px; }.now-event time, .notice-row time { grid-column: 1 / -1; }.now-event h3 { font-size: 19px; }.prep-grid { grid-template-columns: 1fr; padding-top: 35px; }.prep-card { min-height: 190px; padding: 24px; }.weather-readout { grid-template-columns: 1fr; margin-top: 35px; padding: 24px; }.weather-readout strong { font-size: 75px; }.weather-facts { grid-template-columns: 1fr; }.weather-facts div { min-height: 80px; }.map-heading { display: block; padding-bottom: 35px; }.map-heading > p { margin-top: 25px; }.map-layout { grid-template-columns: 1fr; }.map-art { min-height: 350px; }.map-list { padding: 24px; }.people-grid { grid-template-columns: 1fr; }.source-table > div { grid-template-columns: 1fr; gap: 8px; }.site-footer { grid-template-columns: 1fr; gap: 28px; padding: 45px 24px 88px; }.footer-links { gap: 14px; }
 }
+
+/* Edition 02.1 — live weather and richer place texture */
+.home-weather { width: min(1120px, calc(100% - 40px)); display: grid; grid-template-columns: 94px 1fr auto; gap: 22px; align-items: center; margin: 24px auto 0; padding: 18px 22px; border-top: 3px solid var(--gold-dark); background: var(--surface); }
+.weather-icon { display: block; width: 78px; height: 78px; }
+.weather-icon img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.weather-icon--large { width: 112px; height: 112px; }
+.home-weather-reading .eyebrow { margin: 0 0 5px; }
+.home-weather-temp { display: flex; align-items: baseline; gap: 12px; color: var(--forest); font: 600 34px/1 var(--font-serif); letter-spacing: -.04em; }
+.home-weather-temp span { color: var(--ink); font: 700 14px/1.3 var(--font-sans); letter-spacing: 0; }
+.home-weather-reading > p:not(.eyebrow) { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+.home-weather-meta { display: grid; justify-items: end; gap: 8px; color: var(--muted); font-size: 11px; }
+.home-weather-meta a { color: var(--forest); font-size: 12px; font-weight: 800; }
+.prep-weather-feature { display: grid; grid-template-columns: 120px 1fr auto; gap: 24px; align-items: center; margin-top: 55px; padding: 22px 28px; background: var(--forest); color: var(--paper); }
+.prep-weather-feature .eyebrow { color: var(--gold); }
+.prep-weather-feature h2 { margin: 7px 0 5px; font: 600 28px/1.25 var(--font-serif); }
+.prep-weather-feature p { margin: 0; color: #cad8ce; font-size: 14px; line-height: 1.6; }
+.prep-weather-facts { display: grid; justify-items: end; gap: 7px; color: #cad8ce; font-size: 12px; text-align: right; }
+.prep-weather-facts small { font-size: 11px; }
+.prep-weather-facts .source { color: var(--gold); font-size: 11px; }
+.weather-current { display: flex; gap: 22px; align-items: center; }
+.weather-current .weather-icon { flex: 0 0 auto; }
+.market-choice-photo { width: calc(100% + 48px); height: 128px !important; min-height: 0 !important; margin: -24px -24px 20px; }
+.market-choice-photo figcaption { display: none; }
+.market-choices a:last-child .market-choice-photo { filter: saturate(.82) brightness(.82); }
+.place-photo--text { background: linear-gradient(145deg, #214d42, #173a32); }
+
+@media (max-width: 720px) {
+  .home-weather { width: calc(100% - 32px); grid-template-columns: 68px 1fr; gap: 12px; padding: 16px; }
+  .weather-icon { width: 62px; height: 62px; }
+  .weather-icon--large { width: 88px; height: 88px; }
+  .home-weather-temp { font-size: 29px; }
+  .home-weather-temp span { font-size: 13px; }
+  .home-weather-reading > p:not(.eyebrow) { font-size: 12px; line-height: 1.5; }
+  .home-weather-meta { grid-column: 2; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .prep-weather-feature { display: grid; grid-template-columns: 78px 1fr; gap: 14px; margin-top: 35px; padding: 18px; }
+  .prep-weather-feature .weather-icon--large { width: 72px; height: 72px; }
+  .prep-weather-feature h2 { font-size: 22px; }
+  .prep-weather-feature p { font-size: 13px; }
+  .prep-weather-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: start; gap: 6px 12px; text-align: left; }
+  .prep-weather-facts small { width: 100%; }
+  .weather-current { gap: 14px; align-items: start; }
+  .weather-current .weather-icon--large { width: 76px; height: 76px; }
+  .market-choices a { padding-top: 24px; }
+  .market-choice-photo { width: calc(100% + 48px); height: 116px !important; margin: -24px -24px 20px; }
+}
