@@ -1,134 +1,2539 @@
 "use client";
 
-/* eslint-disable @next/next/no-html-link-for-pages, @next/next/no-img-element, react-hooks/set-state-in-effect, jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions, jsx-a11y/no-autofocus -- the app owns its small route shell and uses local licensed imagery. */
+/* eslint-disable @next/next/no-html-link-for-pages, @next/next/no-img-element, react-hooks/set-state-in-effect, jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- the app owns its small route shell and uses local licensed imagery. */
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  Heart,
+  Landmark,
+  MapPinned,
+  Menu,
+  Route,
+  Search,
+  Utensils,
+} from "lucide-react";
 import type { CitySnapshot } from "../../lib/city";
 import { HISTORICAL_PEOPLE, HISTORY_TIMELINE } from "../../lib/content";
+import { CommandPalette, MobileNavigationDrawer } from "./NavigationOverlays";
 import "./station.css";
 
 type Place = {
-  slug: string; name: string; region: string; type: string; tags: string[]; line: string; body: string;
-  image?: string; imageAlt?: string; credit?: string; source: string; accent: "river" | "paper" | "market" | "forest";
-  visit: string; action: string;
+  slug: string;
+  name: string;
+  region: string;
+  type: string;
+  tags: string[];
+  line: string;
+  body: string;
+  image?: string;
+  imageAlt?: string;
+  credit?: string;
+  source: string;
+  accent: "river" | "paper" | "market" | "forest";
+  visit: string;
+  action: string;
 };
 
 const PLACES: readonly Place[] = [
-  { slug: "sogeumsan", name: "소금산 그랜드밸리", region: "서부 자연", type: "야외", tags: ["풍경", "걷기"], line: "절벽 곁을 걷고, 다리 위에서 간현을 보다.", body: "삼산천을 사이에 둔 소금산과 간현산. 데크 산책로에서 출발해 출렁다리·소금잔도·스카이타워를 차례로 만나는 원주의 대표적인 큰 풍경입니다.", source: "https://www.wonju.go.kr/tour/contents.do?key=5516", accent: "river", visit: "날씨·휴장·매표 마감은 공식 시설 안내에서 확인", action: "출렁다리와 잔도를 걷기" },
-  { slug: "museum-san", name: "뮤지엄 SAN", region: "서부 자연", type: "실내", tags: ["예술", "건축"], line: "산속에서, 건축과 작품 사이를 천천히.", body: "산의 능선과 물의 반사, 돌과 빛을 한 번에 보는 미술관. 전시 하나를 급히 소비하기보다 야외 정원과 건축의 순서를 함께 걷는 곳으로 소개합니다.", image: "/museum-san.jpg", imageAlt: "뮤지엄 SAN의 붉은 조각과 수공간", credit: "Museum SAN.tif · Wikimedia Commons · 공개 라이선스 확인 후 JPG 변환", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4014", accent: "river", visit: "전시·패키지·예약 조건은 공식 사이트에서 확인", action: "정원과 본관을 천천히 보기" },
-  { slug: "gangwon-gamyeong", name: "강원감영", region: "원도심", type: "야외", tags: ["역사", "산책"], line: "시장으로 가기 전, 원주의 오래된 마당.", body: "조선시대 강원도 관찰사가 머물던 감영의 뜰과 문을 먼저 읽고, 몇 블록 뒤 시장 골목으로 내려갑니다. 원주의 시간이 한 끼로 이어지는 출발점입니다.", image: "/gangwon-gamyeong.jpg", imageAlt: "연꽃과 누각이 있는 강원감영", credit: "국가유산청 · KOGL 제1유형 · 출처 표시", source: "https://www.wonju.go.kr/tour/contents.do?key=5523", accent: "forest", visit: "문화유산 공간의 운영·행사 여부는 공식 안내 확인", action: "뜰을 한 바퀴 돌고 시장으로 이동" },
-  { slug: "jungang-market", name: "중앙시장·미로예술시장", region: "원도심", type: "먹거리", tags: ["시장", "한 끼"], line: "골목을 한 번 더 돌아, 원주의 맛을 만나다.", body: "중앙시장은 점포와 골목을 발견하는 장소입니다. 목적 메뉴 하나만 정하기보다 시장 안쪽으로 한 번 더 들어가고, 영업 중인 점포를 현장에서 고릅니다.", image: "/wonju-market.jpg", imageAlt: "원주 중앙시장 안 만두 점포", credit: "최광모 · Wikimedia Commons · CC BY-SA", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4047", accent: "market", visit: "점포별 영업일·메뉴·대기는 현장 확인", action: "골목을 걷고 먹을 곳 고르기" },
-  { slug: "jayu-market", name: "자유시장", region: "원도심", type: "먹거리", tags: ["시장", "만두"], line: "풍경을 본 다음에는, 시장에서 한 끼.", body: "자유시장은 도착해서 시장의 표정과 그날 열린 선택지를 살피기 좋은 곳입니다. 만두·칼국수처럼 익숙한 한 끼를 고르고, 다음 골목으로 천천히 이어갑니다.", image: "/wonju-free-market-aisle.jpg", imageAlt: "원주 자유시장 안쪽 통로", credit: "원주자유시장 · 최광모 · Wikimedia Commons · CC BY-SA · 시장 풍경", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4044", accent: "market", visit: "점포별 영업일·메뉴·대기는 현장 확인", action: "시장 안에서 오늘의 한 끼 찾기" },
-  { slug: "hanji-park", name: "원주한지테마파크", region: "예술과 책", type: "실내", tags: ["한지", "체험"], line: "종이를 바라보는 데서, 한지를 만나는 시간으로.", body: "원주가 이어온 한지 문화를 전시와 체험으로 만나는 곳. 종이를 완성품으로만 보지 않고, 섬유의 결·빛·손의 순서로 읽는 문화 목적지입니다.", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4009", accent: "paper", visit: "체험 운영·예약·휴관일은 공식 안내에서 확인", action: "전시를 보고 체험 일정 확인" },
-  { slug: "park-kyungni", name: "박경리문학공원", region: "예술과 책", type: "실내·야외", tags: ["문학", "산책"], line: "책의 이름에서, 작가가 머문 장소로.", body: "박경리의 집과 정원, 작품의 시간이 남은 장소를 천천히 읽습니다. 기념관만 보고 끝내지 않고 문장과 마당 사이를 걷는 문학 여행으로 제안합니다.", image: "/park-kyungri-museum.jpg", imageAlt: "원주 박경리 뮤지엄 전경", credit: "Youngjin · Wikimedia Commons · CC BY-SA 4.0", source: "https://www.wonju.go.kr/tour/contents.do?key=6479", accent: "paper", visit: "관람 시간·휴관일은 박경리문학공원 공식 안내 확인", action: "집과 정원을 따라 문장 읽기" },
-  { slug: "guryongsa", name: "치악산 구룡사", region: "동부 숲길", type: "역사·자연", tags: ["사찰", "숲길"], line: "천년 사찰을 지나 치악산 숲으로 들어가기.", body: "원주관광이 소개하는 치악산의 대표 사찰입니다. 구룡사에서 세렴폭포와 산길로 이어지는 선택지를 확인하고, 계절과 체력에 맞춰 머무는 시간을 정합니다.", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&rcpp=12&resrceNo=4733&sc1=20&si1=50&si2=90&tc10=Y", accent: "forest", visit: "국립공원 탐방로·주차·입산 정보는 출발 전 확인", action: "사찰 마당에서 숲길로 이어가기" },
-  { slug: "chiaksan-trail", name: "치악산 둘레길 꽃밭머리길", region: "동부 숲길", type: "걷기", tags: ["둘레길", "숲"], line: "소나무 숲과 오래된 절을 잇는 원주의 길.", body: "흙길과 숲길, 물길과 마을길이 이어지는 치악산 둘레길의 한 장면입니다. 긴 코스를 한 번에 완주하기보다 공식 코스와 오늘의 걸음 수를 먼저 맞춥니다.", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&rcpp=12&resrceNo=4001&sc1=20&sc9=DYNLIST&si1=50&tc10=Y", accent: "forest", visit: "코스 통제·날씨·대중교통은 원주걷기여행길에서 확인", action: "숲의 그늘을 따라 천천히 걷기" },
-  { slug: "wonju-history-museum", name: "원주역사박물관", region: "동부 숲길", type: "실내", tags: ["역사", "가족"], line: "평원에서 강원감영까지, 원주의 시간을 한 자리에서.", body: "원주의 역사와 전통문화를 전시와 체험으로 만나는 공간입니다. 강원감영을 먼저 보았다면 유물과 생활의 층위를 이어 읽기 좋습니다.", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&rcpp=12&resrceNo=4011&sc1=20&si1=56&si2=121&tc10=Y", accent: "paper", visit: "전시·휴관일·체험 운영은 박물관 공식 안내 확인", action: "전시실을 보고 전통문화 체험 살피기" },
-  { slug: "wonju-station-water-tower", name: "원주역 급수탑", region: "원도심", type: "역사", tags: ["철도", "도시"], line: "기차가 남긴 도시의 시간을 찾아서.", body: "옛 원주역에 남은 등록문화재 급수탑입니다. 시장과 감영 사이에 철도 도시의 기억을 덧대어 걷는 짧은 역사 산책으로 이어갑니다.", source: "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&resrceNo=4666&tc10=", accent: "market", visit: "현장 접근 가능 여부와 주변 공사 정보는 공식 안내 확인", action: "시장 가는 길에 철도 흔적 찾아보기" },
+  {
+    slug: "sogeumsan",
+    name: "소금산 그랜드밸리",
+    region: "서부 자연",
+    type: "야외",
+    tags: ["풍경", "걷기"],
+    line: "절벽 곁을 걷고, 다리 위에서 간현을 보다.",
+    body: "삼산천을 사이에 둔 소금산과 간현산. 데크 산책로에서 출발해 출렁다리·소금잔도·스카이타워를 차례로 만나는 원주의 대표적인 큰 풍경입니다.",
+    source: "https://www.wonju.go.kr/tour/contents.do?key=5516",
+    accent: "river",
+    visit: "날씨·휴장·매표 마감은 공식 시설 안내에서 확인",
+    action: "출렁다리와 잔도를 걷기",
+  },
+  {
+    slug: "museum-san",
+    name: "뮤지엄 SAN",
+    region: "서부 자연",
+    type: "실내",
+    tags: ["예술", "건축"],
+    line: "산속에서, 건축과 작품 사이를 천천히.",
+    body: "산의 능선과 물의 반사, 돌과 빛을 한 번에 보는 미술관. 전시 하나를 급히 소비하기보다 야외 정원과 건축의 순서를 함께 걷는 곳으로 소개합니다.",
+    image: "/museum-san.jpg",
+    imageAlt: "뮤지엄 SAN의 붉은 조각과 수공간",
+    credit:
+      "Museum SAN.tif · Wikimedia Commons · 공개 라이선스 확인 후 JPG 변환",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4014",
+    accent: "river",
+    visit: "전시·패키지·예약 조건은 공식 사이트에서 확인",
+    action: "정원과 본관을 천천히 보기",
+  },
+  {
+    slug: "gangwon-gamyeong",
+    name: "강원감영",
+    region: "원도심",
+    type: "야외",
+    tags: ["역사", "산책"],
+    line: "시장으로 가기 전, 원주의 오래된 마당.",
+    body: "조선시대 강원도 관찰사가 머물던 감영의 뜰과 문을 먼저 읽고, 몇 블록 뒤 시장 골목으로 내려갑니다. 원주의 시간이 한 끼로 이어지는 출발점입니다.",
+    image: "/gangwon-gamyeong.jpg",
+    imageAlt: "연꽃과 누각이 있는 강원감영",
+    credit: "국가유산청 · KOGL 제1유형 · 출처 표시",
+    source: "https://www.wonju.go.kr/tour/contents.do?key=5523",
+    accent: "forest",
+    visit: "문화유산 공간의 운영·행사 여부는 공식 안내 확인",
+    action: "뜰을 한 바퀴 돌고 시장으로 이동",
+  },
+  {
+    slug: "jungang-market",
+    name: "중앙시장·미로예술시장",
+    region: "원도심",
+    type: "먹거리",
+    tags: ["시장", "한 끼"],
+    line: "골목을 한 번 더 돌아, 원주의 맛을 만나다.",
+    body: "중앙시장은 점포와 골목을 발견하는 장소입니다. 목적 메뉴 하나만 정하기보다 시장 안쪽으로 한 번 더 들어가고, 영업 중인 점포를 현장에서 고릅니다.",
+    image: "/wonju-market.jpg",
+    imageAlt: "원주 중앙시장 안 만두 점포",
+    credit: "최광모 · Wikimedia Commons · CC BY-SA",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4047",
+    accent: "market",
+    visit: "점포별 영업일·메뉴·대기는 현장 확인",
+    action: "골목을 걷고 먹을 곳 고르기",
+  },
+  {
+    slug: "jayu-market",
+    name: "자유시장",
+    region: "원도심",
+    type: "먹거리",
+    tags: ["시장", "만두"],
+    line: "풍경을 본 다음에는, 시장에서 한 끼.",
+    body: "자유시장은 도착해서 시장의 표정과 그날 열린 선택지를 살피기 좋은 곳입니다. 만두·칼국수처럼 익숙한 한 끼를 고르고, 다음 골목으로 천천히 이어갑니다.",
+    image: "/wonju-free-market-aisle.jpg",
+    imageAlt: "원주 자유시장 안쪽 통로",
+    credit: "원주자유시장 · 최광모 · Wikimedia Commons · CC BY-SA · 시장 풍경",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4044",
+    accent: "market",
+    visit: "점포별 영업일·메뉴·대기는 현장 확인",
+    action: "시장 안에서 오늘의 한 끼 찾기",
+  },
+  {
+    slug: "hanji-park",
+    name: "원주한지테마파크",
+    region: "예술과 책",
+    type: "실내",
+    tags: ["한지", "체험"],
+    line: "종이를 바라보는 데서, 한지를 만나는 시간으로.",
+    body: "원주가 이어온 한지 문화를 전시와 체험으로 만나는 곳. 종이를 완성품으로만 보지 않고, 섬유의 결·빛·손의 순서로 읽는 문화 목적지입니다.",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5533&resrceNo=4009",
+    accent: "paper",
+    visit: "체험 운영·예약·휴관일은 공식 안내에서 확인",
+    action: "전시를 보고 체험 일정 확인",
+  },
+  {
+    slug: "park-kyungni",
+    name: "박경리문학공원",
+    region: "예술과 책",
+    type: "실내·야외",
+    tags: ["문학", "산책"],
+    line: "책의 이름에서, 작가가 머문 장소로.",
+    body: "박경리의 집과 정원, 작품의 시간이 남은 장소를 천천히 읽습니다. 기념관만 보고 끝내지 않고 문장과 마당 사이를 걷는 문학 여행으로 제안합니다.",
+    image: "/park-kyungri-museum.jpg",
+    imageAlt: "원주 박경리 뮤지엄 전경",
+    credit: "Youngjin · Wikimedia Commons · CC BY-SA 4.0",
+    source: "https://www.wonju.go.kr/tour/contents.do?key=6479",
+    accent: "paper",
+    visit: "관람 시간·휴관일은 박경리문학공원 공식 안내 확인",
+    action: "집과 정원을 따라 문장 읽기",
+  },
+  {
+    slug: "guryongsa",
+    name: "치악산 구룡사",
+    region: "동부 숲길",
+    type: "역사·자연",
+    tags: ["사찰", "숲길"],
+    line: "천년 사찰을 지나 치악산 숲으로 들어가기.",
+    body: "원주관광이 소개하는 치악산의 대표 사찰입니다. 구룡사에서 세렴폭포와 산길로 이어지는 선택지를 확인하고, 계절과 체력에 맞춰 머무는 시간을 정합니다.",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&rcpp=12&resrceNo=4733&sc1=20&si1=50&si2=90&tc10=Y",
+    accent: "forest",
+    visit: "국립공원 탐방로·주차·입산 정보는 출발 전 확인",
+    action: "사찰 마당에서 숲길로 이어가기",
+  },
+  {
+    slug: "chiaksan-trail",
+    name: "치악산 둘레길 꽃밭머리길",
+    region: "동부 숲길",
+    type: "걷기",
+    tags: ["둘레길", "숲"],
+    line: "소나무 숲과 오래된 절을 잇는 원주의 길.",
+    body: "흙길과 숲길, 물길과 마을길이 이어지는 치악산 둘레길의 한 장면입니다. 긴 코스를 한 번에 완주하기보다 공식 코스와 오늘의 걸음 수를 먼저 맞춥니다.",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&rcpp=12&resrceNo=4001&sc1=20&sc9=DYNLIST&si1=50&tc10=Y",
+    accent: "forest",
+    visit: "코스 통제·날씨·대중교통은 원주걷기여행길에서 확인",
+    action: "숲의 그늘을 따라 천천히 걷기",
+  },
+  {
+    slug: "wonju-history-museum",
+    name: "원주역사박물관",
+    region: "동부 숲길",
+    type: "실내",
+    tags: ["역사", "가족"],
+    line: "평원에서 강원감영까지, 원주의 시간을 한 자리에서.",
+    body: "원주의 역사와 전통문화를 전시와 체험으로 만나는 공간입니다. 강원감영을 먼저 보았다면 유물과 생활의 층위를 이어 읽기 좋습니다.",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&rcpp=12&resrceNo=4011&sc1=20&si1=56&si2=121&tc10=Y",
+    accent: "paper",
+    visit: "전시·휴관일·체험 운영은 박물관 공식 안내 확인",
+    action: "전시실을 보고 전통문화 체험 살피기",
+  },
+  {
+    slug: "wonju-station-water-tower",
+    name: "원주역 급수탑",
+    region: "원도심",
+    type: "역사",
+    tags: ["철도", "도시"],
+    line: "기차가 남긴 도시의 시간을 찾아서.",
+    body: "옛 원주역에 남은 등록문화재 급수탑입니다. 시장과 감영 사이에 철도 도시의 기억을 덧대어 걷는 짧은 역사 산책으로 이어갑니다.",
+    source:
+      "https://www.wonju.go.kr/tour/viewTnResrceDataT.do?key=5477&resrceNo=4666&tc10=",
+    accent: "market",
+    visit: "현장 접근 가능 여부와 주변 공사 정보는 공식 안내 확인",
+    action: "시장 가는 길에 철도 흔적 찾아보기",
+  },
 ] as const;
 
 const COURSES = [
-  { slug: "downtown-table", label: "원도심 도보", title: "감영의 문을 지나, 시장의 김을 만나는 날", body: "강원감영 → 중앙시장·미로예술시장 → 자유시장", meta: "도보 중심 · 점심을 시장에서 고르는 코스", tone: "market", places: ["gangwon-gamyeong", "jungang-market", "jayu-market"], note: "오전에는 뜰과 문, 점심에는 골목과 김. 목적지를 하나씩 소비하기보다 원도심의 간격을 걸어보세요." },
-  { slug: "west-scene", label: "서부 자연·미술", title: "다리 위의 긴장 다음에, 물 위의 고요", body: "소금산 그랜드밸리 → 뮤지엄 SAN", meta: "자가용 권장 · 야외 뒤 실내 대안", tone: "river", places: ["sogeumsan", "museum-san"], note: "하늘이 좋은 날은 간현의 높이를 먼저, 날씨가 흔들리면 뮤지엄 SAN을 중심에 두고 순서를 다시 확인하세요." },
-  { slug: "paper-and-story", label: "문학·한지", title: "읽고 만지고, 한 사람의 원주를 따라", body: "박경리문학공원 → 원주한지테마파크", meta: "실내 중심 · 예약·체험 확인 필요", tone: "paper", places: ["park-kyungni", "hanji-park"], note: "한 사람의 문장과 한 장의 종이를 이어보는 조용한 코스. 운영이 바뀔 수 있어 두 기관의 공지를 먼저 확인합니다." },
-  { slug: "chiaksan-forest", label: "치악산 숲길", title: "구룡사에서 숲의 그늘을 만나는 날", body: "치악산 구룡사 → 꽃밭머리길", meta: "야외 중심 · 탐방로와 날씨 확인", tone: "river", places: ["guryongsa", "chiaksan-trail"], note: "사찰 마당과 숲길의 리듬이 다른 코스입니다. 공식 탐방로 상태를 확인하고 오늘 걸을 만큼만 고르세요." },
-  { slug: "history-on-foot", label: "철도·역사", title: "급수탑에서 박물관까지, 도시의 시간을 걷는 날", body: "원주역 급수탑 → 중앙시장·미로예술시장 → 원주역사박물관", meta: "역사 산책 · 시장에서 식사 선택", tone: "market", places: ["wonju-station-water-tower", "jungang-market", "wonju-history-museum"], note: "철도와 시장, 박물관을 연결해 원주의 도시 형성을 읽습니다. 각 시설의 관람·접근 정보는 출발 전에 확인하세요." },
+  {
+    slug: "downtown-table",
+    label: "원도심 도보",
+    title: "감영의 문을 지나, 시장의 김을 만나는 날",
+    body: "강원감영 → 중앙시장·미로예술시장 → 자유시장",
+    meta: "도보 중심 · 점심을 시장에서 고르는 코스",
+    tone: "market",
+    places: ["gangwon-gamyeong", "jungang-market", "jayu-market"],
+    note: "오전에는 뜰과 문, 점심에는 골목과 김. 목적지를 하나씩 소비하기보다 원도심의 간격을 걸어보세요.",
+  },
+  {
+    slug: "west-scene",
+    label: "서부 자연·미술",
+    title: "다리 위의 긴장 다음에, 물 위의 고요",
+    body: "소금산 그랜드밸리 → 뮤지엄 SAN",
+    meta: "자가용 권장 · 야외 뒤 실내 대안",
+    tone: "river",
+    places: ["sogeumsan", "museum-san"],
+    note: "하늘이 좋은 날은 간현의 높이를 먼저, 날씨가 흔들리면 뮤지엄 SAN을 중심에 두고 순서를 다시 확인하세요.",
+  },
+  {
+    slug: "paper-and-story",
+    label: "문학·한지",
+    title: "읽고 만지고, 한 사람의 원주를 따라",
+    body: "박경리문학공원 → 원주한지테마파크",
+    meta: "실내 중심 · 예약·체험 확인 필요",
+    tone: "paper",
+    places: ["park-kyungni", "hanji-park"],
+    note: "한 사람의 문장과 한 장의 종이를 이어보는 조용한 코스. 운영이 바뀔 수 있어 두 기관의 공지를 먼저 확인합니다.",
+  },
+  {
+    slug: "chiaksan-forest",
+    label: "치악산 숲길",
+    title: "구룡사에서 숲의 그늘을 만나는 날",
+    body: "치악산 구룡사 → 꽃밭머리길",
+    meta: "야외 중심 · 탐방로와 날씨 확인",
+    tone: "river",
+    places: ["guryongsa", "chiaksan-trail"],
+    note: "사찰 마당과 숲길의 리듬이 다른 코스입니다. 공식 탐방로 상태를 확인하고 오늘 걸을 만큼만 고르세요.",
+  },
+  {
+    slug: "history-on-foot",
+    label: "철도·역사",
+    title: "급수탑에서 박물관까지, 도시의 시간을 걷는 날",
+    body: "원주역 급수탑 → 중앙시장·미로예술시장 → 원주역사박물관",
+    meta: "역사 산책 · 시장에서 식사 선택",
+    tone: "market",
+    places: [
+      "wonju-station-water-tower",
+      "jungang-market",
+      "wonju-history-museum",
+    ],
+    note: "철도와 시장, 박물관을 연결해 원주의 도시 형성을 읽습니다. 각 시설의 관람·접근 정보는 출발 전에 확인하세요.",
+  },
 ] as const;
 
 const ASSET_RECORDS = [
-  ["gangwon-gamyeong-evening.jpg", "강원감영", "국가유산청", "KOGL 제1유형", "https://www.wonju.go.kr/tour/contents.do?key=5523"],
-  ["museum-san.jpg", "뮤지엄 SAN", "Jihye Jung · Wikimedia Commons", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Museum_SAN.tif"],
-  ["wonju-market.jpg", "원주 시장 음식 풍경", "최광모 · Wikimedia Commons", "CC BY-SA", "https://commons.wikimedia.org/wiki/File:2020-03-29_11.34.38_%EC%9B%90%EC%A3%BC%EC%9E%90%EC%9C%A0%EC%8B%9C%EC%9E%A5_%EB%A7%8C%EB%91%90%EA%B0%80%EA%B2%8C.jpg"],
-  ["wonju-free-market-aisle.jpg", "원주 자유시장 통로", "최광모 · Wikimedia Commons", "CC BY-SA", "https://commons.wikimedia.org/wiki/Category:Wonju_Free_Market"],
-  ["park-kyungri-museum.jpg", "박경리문학공원", "Youngjin · Wikimedia Commons", "CC BY-SA 4.0", "https://commons.wikimedia.org/wiki/File:Park_Kyung_ri_Museum_01.jpg"],
+  [
+    "gangwon-gamyeong-evening.jpg",
+    "강원감영",
+    "국가유산청",
+    "KOGL 제1유형",
+    "https://www.wonju.go.kr/tour/contents.do?key=5523",
+  ],
+  [
+    "museum-san.jpg",
+    "뮤지엄 SAN",
+    "Jihye Jung · Wikimedia Commons",
+    "CC BY-SA 4.0",
+    "https://commons.wikimedia.org/wiki/File:Museum_SAN.tif",
+  ],
+  [
+    "wonju-market.jpg",
+    "원주 시장 음식 풍경",
+    "최광모 · Wikimedia Commons",
+    "CC BY-SA",
+    "https://commons.wikimedia.org/wiki/File:2020-03-29_11.34.38_%EC%9B%90%EC%A3%BC%EC%9E%90%EC%9C%A0%EC%8B%9C%EC%9E%A5_%EB%A7%8C%EB%91%90%EA%B0%80%EA%B2%8C.jpg",
+  ],
+  [
+    "wonju-free-market-aisle.jpg",
+    "원주 자유시장 통로",
+    "최광모 · Wikimedia Commons",
+    "CC BY-SA",
+    "https://commons.wikimedia.org/wiki/Category:Wonju_Free_Market",
+  ],
+  [
+    "park-kyungri-museum.jpg",
+    "박경리문학공원",
+    "Youngjin · Wikimedia Commons",
+    "CC BY-SA 4.0",
+    "https://commons.wikimedia.org/wiki/File:Park_Kyung_ri_Museum_01.jpg",
+  ],
 ] as const;
 
 const UPCOMING_EVENTS = [
-  { date: "09.18 — 09.20", title: "2026 원주 댄싱카니발", place: "원주 도심 일원", source: "https://www.wonju.go.kr/tour/selectBbsNttView.do?bbsNo=984&key=5538&nttNo=490014" },
-  { date: "10.23 — 10.25", title: "2026 원주 만두축제", place: "원주천 새벽시장 일원", source: "https://www.wonju.go.kr/www/selectBbsNttView.do?bbsNo=145&key=222&nttNo=490502" },
+  {
+    date: "09.18 — 09.20",
+    title: "2026 원주 댄싱카니발",
+    place: "원주 도심 일원",
+    source:
+      "https://www.wonju.go.kr/tour/selectBbsNttView.do?bbsNo=984&key=5538&nttNo=490014",
+  },
+  {
+    date: "10.23 — 10.25",
+    title: "2026 원주 만두축제",
+    place: "원주천 새벽시장 일원",
+    source:
+      "https://www.wonju.go.kr/www/selectBbsNttView.do?bbsNo=145&key=222&nttNo=490502",
+  },
 ] as const;
 
-const NAV = [["/places", "어디 갈까"], ["/eat", "먹고 마시기"], ["/courses", "하루 코스"], ["/now", "지금 원주"], ["/plan", "여행 준비"]] as const;
-const QUICK_NAV = [["/places", "장소"], ["/eat", "먹거리"], ["/courses", "코스"], ["/map", "지도"]] as const;
+const NAV = [
+  ["/places", "어디 갈까"],
+  ["/eat", "먹고 마시기"],
+  ["/courses", "하루 코스"],
+  ["/now", "지금 원주"],
+  ["/plan", "여행 준비"],
+] as const;
+const QUICK_NAV = [
+  ["/places", "장소"],
+  ["/eat", "먹거리"],
+  ["/courses", "코스"],
+  ["/map", "지도"],
+] as const;
 
 const DEFAULT_CITY: CitySnapshot = {
   generatedAt: new Date(0).toISOString(),
-  weather: { provider: "기상청 / Open-Meteo", sourceUrl: "https://www.weather.go.kr/", status: "UNAVAILABLE", fetchedAt: null, detail: "현재 확인 불가", temperature: null, apparentTemperature: null, humidity: null, windSpeed: null, weatherCode: null, high: null, low: null, precipitationProbability: null, sunrise: null, sunset: null, hourly: [] },
-  air: { provider: "AirKorea / Open-Meteo", sourceUrl: "https://www.airkorea.or.kr/", status: "UNAVAILABLE", fetchedAt: null, detail: "현재 확인 불가", pm10: null, pm25: null, grade: null },
-  alerts: { provider: "기상청 기상특보", sourceUrl: "https://www.weather.go.kr/w/warning/report.do", status: "UNAVAILABLE", fetchedAt: null, detail: "확인 불가", level: null, label: "CHECK", title: null, issuedAt: null },
-  notices: { provider: "원주시청 새소식", sourceUrl: "https://www.wonju.go.kr/www/sub.do?key=209", status: "UNAVAILABLE", fetchedAt: null, detail: "현재 확인 불가", items: [], providers: [], coverage: { geolocated: 0, eligible: 0, percentage: null } },
-  population: { provider: "원주통계정보", sourceUrl: "https://www.wonju.go.kr/stat/index.do", status: "UNAVAILABLE", fetchedAt: null, detail: "현재 확인 불가", period: null, population: null, households: null, male: null, female: null, populationChange: null, householdChange: null },
-  mayor: { provider: "원주시청", sourceUrl: "https://www.wonju.go.kr/www/main.do", status: "UNAVAILABLE", fetchedAt: null, detail: "현재 확인 불가", name: null },
-  map: { provider: "OpenStreetMap", sourceUrl: "https://www.openstreetmap.org/", status: "LIVE", fetchedAt: null, detail: "보조 지도", kind: "OPENSTREETMAP", publicAppKey: null },
+  weather: {
+    provider: "기상청 / Open-Meteo",
+    sourceUrl: "https://www.weather.go.kr/",
+    status: "UNAVAILABLE",
+    fetchedAt: null,
+    detail: "현재 확인 불가",
+    temperature: null,
+    apparentTemperature: null,
+    humidity: null,
+    windSpeed: null,
+    weatherCode: null,
+    high: null,
+    low: null,
+    precipitationProbability: null,
+    sunrise: null,
+    sunset: null,
+    hourly: [],
+  },
+  air: {
+    provider: "AirKorea / Open-Meteo",
+    sourceUrl: "https://www.airkorea.or.kr/",
+    status: "UNAVAILABLE",
+    fetchedAt: null,
+    detail: "현재 확인 불가",
+    pm10: null,
+    pm25: null,
+    grade: null,
+  },
+  alerts: {
+    provider: "기상청 기상특보",
+    sourceUrl: "https://www.weather.go.kr/w/warning/report.do",
+    status: "UNAVAILABLE",
+    fetchedAt: null,
+    detail: "확인 불가",
+    level: null,
+    label: "CHECK",
+    title: null,
+    issuedAt: null,
+  },
+  notices: {
+    provider: "원주시청 새소식",
+    sourceUrl: "https://www.wonju.go.kr/www/sub.do?key=209",
+    status: "UNAVAILABLE",
+    fetchedAt: null,
+    detail: "현재 확인 불가",
+    items: [],
+    providers: [],
+    coverage: { geolocated: 0, eligible: 0, percentage: null },
+  },
+  population: {
+    provider: "원주통계정보",
+    sourceUrl: "https://www.wonju.go.kr/stat/index.do",
+    status: "UNAVAILABLE",
+    fetchedAt: null,
+    detail: "현재 확인 불가",
+    period: null,
+    population: null,
+    households: null,
+    male: null,
+    female: null,
+    populationChange: null,
+    householdChange: null,
+  },
+  mayor: {
+    provider: "원주시청",
+    sourceUrl: "https://www.wonju.go.kr/www/main.do",
+    status: "UNAVAILABLE",
+    fetchedAt: null,
+    detail: "현재 확인 불가",
+    name: null,
+  },
+  map: {
+    provider: "OpenStreetMap",
+    sourceUrl: "https://www.openstreetmap.org/",
+    status: "LIVE",
+    fetchedAt: null,
+    detail: "보조 지도",
+    kind: "OPENSTREETMAP",
+    publicAppKey: null,
+  },
 };
 
-function dateLabel() { return new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" }).format(new Date()); }
-function timeLabel(value: string | null) { return value ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "numeric", minute: "2-digit" }).format(new Date(value)) : null; }
-function weatherDaylight(weather: CitySnapshot["weather"]) { const sunrise = weather.sunrise ? Date.parse(weather.sunrise) : Number.NaN; const sunset = weather.sunset ? Date.parse(weather.sunset) : Number.NaN; if (Number.isFinite(sunrise) && Number.isFinite(sunset)) { const now = Date.now(); return now >= sunrise && now < sunset; } const hour = Number(new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", hour: "2-digit", hour12: false }).format(new Date())); return Number.isFinite(hour) ? hour >= 6 && hour < 18 : null; }
+function dateLabel() {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  }).format(new Date());
+}
+function timeLabel(value: string | null) {
+  return value
+    ? new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        hour: "numeric",
+        minute: "2-digit",
+      }).format(new Date(value))
+    : null;
+}
+function weatherDaylight(weather: CitySnapshot["weather"]) {
+  const sunrise = weather.sunrise ? Date.parse(weather.sunrise) : Number.NaN;
+  const sunset = weather.sunset ? Date.parse(weather.sunset) : Number.NaN;
+  if (Number.isFinite(sunrise) && Number.isFinite(sunset)) {
+    const now = Date.now();
+    return now >= sunrise && now < sunset;
+  }
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Seoul",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date()),
+  );
+  return Number.isFinite(hour) ? hour >= 6 && hour < 18 : null;
+}
 type WeatherPhase = "loading" | "success" | "partial" | "stale" | "unavailable";
-function weatherPhase(weather: CitySnapshot["weather"]): WeatherPhase { if (weather.status === "UNAVAILABLE" || weather.temperature === null || weather.weatherCode === null) return "unavailable"; if (weather.status === "STALE") return "stale"; if (weather.high === null || weather.low === null || weather.precipitationProbability === null) return "partial"; return "success"; }
-function weatherLabel(weather: CitySnapshot["weather"]) { switch (weather.weatherCode) { case 0: return "맑음"; case 1: case 2: return "구름 조금"; case 3: return "흐림"; case 45: case 48: return "안개"; case 51: case 53: case 55: case 56: case 57: case 61: case 63: case 65: case 66: case 67: case 80: case 81: case 82: return "비"; case 71: case 73: case 75: case 77: case 85: case 86: return "눈"; case 95: case 96: case 99: return "뇌우"; default: return "날씨 확인"; } }
-function weatherIcon(weather: CitySnapshot["weather"]) { const daylight = weatherDaylight(weather); const label = weatherLabel(weather); switch (weather.weatherCode) { case 0: return daylight === null ? null : { slug: daylight ? "clear-day" : "clear-night", label }; case 1: case 2: return daylight === null ? null : { slug: daylight ? "partly-cloudy-day" : "partly-cloudy-night", label }; case 3: return { slug: "cloudy", label }; case 45: case 48: return { slug: "fog", label }; case 51: case 53: case 55: case 56: case 57: case 61: case 63: case 65: case 66: case 67: case 80: case 81: case 82: return { slug: "rain", label }; case 71: case 73: case 75: case 77: case 85: case 86: return { slug: "snow", label }; case 95: case 96: case 99: return { slug: "thunderstorms-day-rain", label }; default: return null; } }
-function alertLabel(alert: CitySnapshot["alerts"]) { if (alert.label === "NORMAL") return "발표된 기상특보 없음"; if (alert.label === "CHECK") return "특보 정보를 확인해 주세요"; return alert.title ?? "기상특보 확인 필요"; }
-function weatherTravelLine(weather: CitySnapshot["weather"], phase: WeatherPhase) { if (phase === "loading") return "날씨를 확인하고 있어요."; if (phase === "unavailable") return "현재 날씨를 불러오지 못했어요. 공식 예보를 열어보세요."; if (weather.precipitationProbability !== null && weather.precipitationProbability >= 60) return "비 가능성이 있어 실내 장소를 함께 살펴보세요."; if (weather.temperature !== null && weather.temperature >= 27) return "더운 시간은 실내에서 쉬고, 아침과 저녁에 걸어보세요."; if (weather.temperature !== null && weather.temperature <= 5) return "겉옷을 챙기고, 짧은 산책부터 시작해보세요."; return "비 가능성을 확인하고 오늘의 순서를 정해보세요."; }
-function MeteoconIcon({ weather, phase, size = "normal" }: { weather: CitySnapshot["weather"]; phase?: WeatherPhase; size?: "normal" | "large" }) { const icon = weatherIcon(weather); if (phase === "loading" || phase === "unavailable" || !icon) return <span className={`weather-icon weather-icon--${size} weather-icon--unknown`} role="img" aria-label={phase === "loading" ? "날씨 확인 중" : weather.weatherCode === null ? "날씨 확인 불가" : `${weatherLabel(weather)} 아이콘 확인 불가`}>?</span>; return <picture className={`weather-icon weather-icon--${size}`}><source media="(prefers-reduced-motion: reduce)" srcSet={`/weather/static/${icon.slug}.svg`} /><img src={`/weather/${icon.slug}.svg`} alt={icon.label} /></picture>; }
-function WeatherMini({ weather, phase }: { weather: CitySnapshot["weather"]; phase: WeatherPhase }) { const updated = timeLabel(weather.fetchedAt); return <section className={`home-weather home-weather--${phase}`} aria-label="오늘 원주 날씨"><MeteoconIcon weather={weather} phase={phase} /><div className="home-weather-reading"><p className="eyebrow">오늘 원주</p><div className="home-weather-temp">{phase === "loading" ? "—" : weather.temperature === null ? "—" : `${weather.temperature}°`}<span>{phase === "loading" ? "확인 중" : weatherLabel(weather)}</span></div><p>{weatherTravelLine(weather, phase)}</p></div><div className="home-weather-meta"><span>{updated ? `업데이트 ${updated}` : phase === "loading" ? "날씨를 확인하고 있어요" : "현재 확인 불가"}</span><a href="/plan/weather">여행 준비에서 자세히 보기 <Arrow /></a></div></section>; }
-function placeFor(slug: string) { return PLACES.find((place) => place.slug === slug) ?? PLACES[0]; }
-function isCurrent(path: string, route: string) { return route === path || (path !== "/" && route.startsWith(path)); }
-function Arrow() { return <span className="arrow" aria-hidden="true">↗</span>; }
-function SaveButton({ id, saved, onSave }: { id: string; saved: boolean; onSave: (id: string) => void }) { return <button className={`save-button ${saved ? "is-saved" : ""}`} onClick={(event) => { event.preventDefault(); onSave(id); }} aria-pressed={saved}>{saved ? "저장됨" : "저장"} <span aria-hidden="true">{saved ? "✓" : "＋"}</span></button>; }
-function Source({ children, href }: { children: ReactNode; href: string }) { return <a className="source" href={href} target="_blank" rel="noreferrer">{children} <Arrow /></a>; }
-function Photo({ place, className = "" }: { place: Place; className?: string }) { const [state, setState] = useState<"loading" | "loaded" | "failed">(place.image ? "loading" : "loaded"); if (!place.image) return <div className={`place-photo place-photo--text ${className}`}><span>{place.region}</span><strong>{place.name}</strong><small>{place.tags.join(" · ")}</small></div>; return <figure className={`place-photo place-photo--${state} ${className}`}><img src={place.image} alt={place.imageAlt ?? place.name} onLoad={() => setState("loaded")} onError={() => setState("failed")} /><figcaption>{state === "failed" ? "사진을 불러오지 못했어요 · 공식 안내에서 장소를 확인하세요" : place.credit}</figcaption></figure>; }
-
-function Home({ city, weatherState }: { city: CitySnapshot; weatherState: WeatherPhase }) {
-  return <main className="home-page">
-    <section className="home-masthead"><div className="home-masthead-copy"><span className="issue-mark">WONJU STATION · EDITION 02</span><p className="home-kicker">원주, 장면과 장면 사이</p><h1>큰 풍경을 보고,<br /><em>원도심에서 한 끼.</em></h1><p className="home-deck">산과 강, 오래된 마당과 시장. 원주에서 오늘 실제로 할 수 있는 일을 사진과 동선으로 골라보세요.</p><a className="button button--light" href="/courses/west-scene">서부 자연부터 시작하기 <Arrow /></a><span className="home-date">{dateLabel()} · 첫 방문자를 위한 원주 편집호</span></div><div className="home-masthead-photo"><img src="/gangwon-gamyeong-evening.jpg" alt="저녁빛이 내려앉은 강원감영" /><div className="photo-caption"><b>표지 사진</b><span>강원감영 · 오래된 마당에서 원도심을 시작하다</span><small>Wikimedia Commons · 공개 라이선스 확인</small></div></div></section>
-    <WeatherMini weather={city.weather} phase={weatherState} />
-    <section className="home-choose"><div className="home-choose-lead"><span className="section-number">01</span><p className="eyebrow">오늘의 선택</p><h2>원주를<br /><em>어떻게 볼까요?</em></h2><p>관광지 이름부터 고르지 않아도 됩니다. 지금의 기분에 가까운 장면을 선택하면 다음 행동을 이어드립니다.</p></div><div className="choose-list">{[["/places/sogeumsan", "높이를 걷고 싶을 때", "절벽·다리·삼산천", "river", "sogeumsan"], ["/places/gangwon-gamyeong", "오래된 도시를 읽고 싶을 때", "감영·문·시장", "forest", "gangwon-gamyeong"], ["/eat", "도착하자마자 먹고 싶을 때", "중앙시장·자유시장", "market", "jungang-market"]].map(([href, title, detail, tone, slug], i) => { const place = placeFor(slug); return <a className={`choose-row choose-row--${tone}`} href={href} key={href}><span>0{i + 1}</span><div><strong>{title}</strong><small>{detail}</small></div>{place.image ? <img src={place.image} alt="" /> : <i>{place.tags[0]}</i>}<Arrow /></a>; })}</div></section>
-    <section className="home-eat"><div className="eat-story-photo"><img src="/wonju-market.jpg" alt="원주 자유시장 만두 가게" /><small>자유시장 참고 사진 · 최광모 · CC BY-SA</small></div><div className="eat-story-copy"><span className="section-number">02</span><p className="eyebrow">먹고 마시기</p><h2>사진보다 먼저,<br /><em>시장에 도착하기.</em></h2><p>원주에서의 먹거리는 검색 결과 하나로 끝나지 않습니다. 중앙시장과 자유시장을 구분해 걷고, 오늘 열려 있는 점포에서 한 끼를 고릅니다.</p><div className="food-notes"><span>만두</span><span>칼국수</span><span>시장 골목</span></div><a className="text-link text-link--dark" href="/eat">원주 시장의 결 보기 <Arrow /></a></div></section>
-    <section className="home-courses"><div className="home-courses-head"><div><span className="section-number">03</span><p className="eyebrow">하루 코스</p><h2>장소가 아니라,<br /><em>순서를 고르세요.</em></h2></div><p>원주는 한 곳을 보고 돌아오는 도시가 아닙니다. 걷는 부담과 식사 시점을 함께 적은 다섯 가지 하루를 비교해보세요.</p><a className="text-link" href="/courses">다섯 코스 비교하기 <Arrow /></a></div><div className="course-track">{COURSES.map((course, i) => <a href={`/courses/${course.slug}`} className={`home-course home-course--${course.tone}`} key={course.slug}><span>0{i + 1}</span><div className="course-thumbs">{course.places.map((slug) => <Photo place={placeFor(slug)} key={slug} />)}</div><h3>{course.label}</h3><strong>{course.title}</strong><small>{course.meta}</small><Arrow /></a>)}</div></section>
-    <section className="home-now"><div className="home-now-intro"><span className="section-number">04</span><p className="eyebrow">지금 원주</p><h2>이번 계절의<br /><em>다음 이유.</em></h2><p>일정이 있는 주말이라면 공식 공지를 먼저 확인하세요. 행사와 상시 장소를 섞어 여행의 밀도를 만듭니다.</p><a className="button button--outline" href="/now">이번 달 일정 보기 <Arrow /></a></div><div className="event-list">{UPCOMING_EVENTS.map((event) => <a href={event.source} target="_blank" rel="noreferrer" className="event-line" key={event.title}><time>{event.date}</time><div><strong>{event.title}</strong><span>{event.place}</span></div><Arrow /></a>)}</div></section>
-    <section className="home-prep"><p className="eyebrow">출발 전 5분</p><h2>지도·날씨·저장한 장소를<br /><em>한 번에 확인하세요.</em></h2><div><a href="/map">원주 지도 <Arrow /></a><a href="/plan/weather">오늘 날씨 <Arrow /></a><a href="/saved">저장한 여행 <Arrow /></a></div></section>
-  </main>;
+function weatherPhase(weather: CitySnapshot["weather"]): WeatherPhase {
+  if (
+    weather.status === "UNAVAILABLE" ||
+    weather.temperature === null ||
+    weather.weatherCode === null
+  )
+    return "unavailable";
+  if (weather.status === "STALE") return "stale";
+  if (
+    weather.high === null ||
+    weather.low === null ||
+    weather.precipitationProbability === null
+  )
+    return "partial";
+  return "success";
+}
+function weatherLabel(weather: CitySnapshot["weather"]) {
+  switch (weather.weatherCode) {
+    case 0:
+      return "맑음";
+    case 1:
+    case 2:
+      return "구름 조금";
+    case 3:
+      return "흐림";
+    case 45:
+    case 48:
+      return "안개";
+    case 51:
+    case 53:
+    case 55:
+    case 56:
+    case 57:
+    case 61:
+    case 63:
+    case 65:
+    case 66:
+    case 67:
+    case 80:
+    case 81:
+    case 82:
+      return "비";
+    case 71:
+    case 73:
+    case 75:
+    case 77:
+    case 85:
+    case 86:
+      return "눈";
+    case 95:
+    case 96:
+    case 99:
+      return "뇌우";
+    default:
+      return "날씨 확인";
+  }
+}
+function weatherIcon(weather: CitySnapshot["weather"]) {
+  const daylight = weatherDaylight(weather);
+  const label = weatherLabel(weather);
+  switch (weather.weatherCode) {
+    case 0:
+      return daylight === null
+        ? null
+        : { slug: daylight ? "clear-day" : "clear-night", label };
+    case 1:
+    case 2:
+      return daylight === null
+        ? null
+        : {
+            slug: daylight ? "partly-cloudy-day" : "partly-cloudy-night",
+            label,
+          };
+    case 3:
+      return { slug: "cloudy", label };
+    case 45:
+    case 48:
+      return { slug: "fog", label };
+    case 51:
+    case 53:
+    case 55:
+    case 56:
+    case 57:
+    case 61:
+    case 63:
+    case 65:
+    case 66:
+    case 67:
+    case 80:
+    case 81:
+    case 82:
+      return { slug: "rain", label };
+    case 71:
+    case 73:
+    case 75:
+    case 77:
+    case 85:
+    case 86:
+      return { slug: "snow", label };
+    case 95:
+    case 96:
+    case 99:
+      return { slug: "thunderstorms-day-rain", label };
+    default:
+      return null;
+  }
+}
+function alertLabel(alert: CitySnapshot["alerts"]) {
+  if (alert.label === "NORMAL") return "발표된 기상특보 없음";
+  if (alert.label === "CHECK") return "특보 정보를 확인해 주세요";
+  return alert.title ?? "기상특보 확인 필요";
+}
+function weatherTravelLine(
+  weather: CitySnapshot["weather"],
+  phase: WeatherPhase,
+) {
+  if (phase === "loading") return "날씨를 확인하고 있어요.";
+  if (phase === "unavailable")
+    return "현재 날씨를 불러오지 못했어요. 공식 예보를 열어보세요.";
+  if (
+    weather.precipitationProbability !== null &&
+    weather.precipitationProbability >= 60
+  )
+    return "비 가능성이 있어 실내 장소를 함께 살펴보세요.";
+  if (weather.temperature !== null && weather.temperature >= 27)
+    return "더운 시간은 실내에서 쉬고, 아침과 저녁에 걸어보세요.";
+  if (weather.temperature !== null && weather.temperature <= 5)
+    return "겉옷을 챙기고, 짧은 산책부터 시작해보세요.";
+  return "비 가능성을 확인하고 오늘의 순서를 정해보세요.";
+}
+function MeteoconIcon({
+  weather,
+  phase,
+  size = "normal",
+}: {
+  weather: CitySnapshot["weather"];
+  phase?: WeatherPhase;
+  size?: "normal" | "large";
+}) {
+  const icon = weatherIcon(weather);
+  if (phase === "loading" || phase === "unavailable" || !icon)
+    return (
+      <span
+        className={`weather-icon weather-icon--${size} weather-icon--unknown`}
+        role="img"
+        aria-label={
+          phase === "loading"
+            ? "날씨 확인 중"
+            : weather.weatherCode === null
+              ? "날씨 확인 불가"
+              : `${weatherLabel(weather)} 아이콘 확인 불가`
+        }
+      >
+        ?
+      </span>
+    );
+  return (
+    <picture className={`weather-icon weather-icon--${size}`}>
+      <source
+        media="(prefers-reduced-motion: reduce)"
+        srcSet={`/weather/static/${icon.slug}.svg`}
+      />
+      <img src={`/weather/${icon.slug}.svg`} alt={icon.label} />
+    </picture>
+  );
+}
+function WeatherMini({
+  weather,
+  phase,
+}: {
+  weather: CitySnapshot["weather"];
+  phase: WeatherPhase;
+}) {
+  const updated = timeLabel(weather.fetchedAt);
+  return (
+    <section
+      className={`home-weather home-weather--${phase}`}
+      aria-label="오늘 원주 날씨"
+    >
+      <MeteoconIcon weather={weather} phase={phase} />
+      <div className="home-weather-reading">
+        <p className="eyebrow">오늘 원주</p>
+        <div className="home-weather-temp">
+          {phase === "loading"
+            ? "—"
+            : weather.temperature === null
+              ? "—"
+              : `${weather.temperature}°`}
+          <span>{phase === "loading" ? "확인 중" : weatherLabel(weather)}</span>
+        </div>
+        <p>{weatherTravelLine(weather, phase)}</p>
+      </div>
+      <div className="home-weather-meta">
+        <span>
+          {updated
+            ? `업데이트 ${updated}`
+            : phase === "loading"
+              ? "날씨를 확인하고 있어요"
+              : "현재 확인 불가"}
+        </span>
+        <a href="/plan/weather">
+          여행 준비에서 자세히 보기 <Arrow />
+        </a>
+      </div>
+    </section>
+  );
+}
+function placeFor(slug: string) {
+  return PLACES.find((place) => place.slug === slug) ?? PLACES[0];
+}
+function isCurrent(path: string, route: string) {
+  return route === path || (path !== "/" && route.startsWith(path));
+}
+function Arrow() {
+  return (
+    <span className="arrow" aria-hidden="true">
+      ↗
+    </span>
+  );
+}
+function SaveButton({
+  id,
+  saved,
+  onSave,
+}: {
+  id: string;
+  saved: boolean;
+  onSave: (id: string) => void;
+}) {
+  return (
+    <button
+      className={`save-button ${saved ? "is-saved" : ""}`}
+      onClick={(event) => {
+        event.preventDefault();
+        onSave(id);
+      }}
+      aria-pressed={saved}
+    >
+      {saved ? "저장됨" : "저장"}{" "}
+      <span aria-hidden="true">{saved ? "✓" : "＋"}</span>
+    </button>
+  );
+}
+function Source({ children, href }: { children: ReactNode; href: string }) {
+  return (
+    <a className="source" href={href} target="_blank" rel="noreferrer">
+      {children} <Arrow />
+    </a>
+  );
+}
+function Photo({
+  place,
+  className = "",
+}: {
+  place: Place;
+  className?: string;
+}) {
+  const [state, setState] = useState<"loading" | "loaded" | "failed">(
+    place.image ? "loading" : "loaded",
+  );
+  if (!place.image)
+    return (
+      <div className={`place-photo place-photo--text ${className}`}>
+        <span>{place.region}</span>
+        <strong>{place.name}</strong>
+        <small>{place.tags.join(" · ")}</small>
+      </div>
+    );
+  return (
+    <figure className={`place-photo place-photo--${state} ${className}`}>
+      <img
+        src={place.image}
+        alt={place.imageAlt ?? place.name}
+        onLoad={() => setState("loaded")}
+        onError={() => setState("failed")}
+      />
+      <figcaption>
+        {state === "failed"
+          ? "사진을 불러오지 못했어요 · 공식 안내에서 장소를 확인하세요"
+          : place.credit}
+      </figcaption>
+    </figure>
+  );
 }
 
-function Places({ saved, onSave, detailSlug }: { saved: Set<string>; onSave: (id: string) => void; detailSlug?: string }) {
+function Home({
+  city,
+  weatherState,
+}: {
+  city: CitySnapshot;
+  weatherState: WeatherPhase;
+}) {
+  return (
+    <main className="home-page">
+      <section className="home-masthead">
+        <div className="home-masthead-copy">
+          <span className="issue-mark">WONJU STATION · EDITION 02</span>
+          <p className="home-kicker">원주, 장면과 장면 사이</p>
+          <h1>
+            큰 풍경을 보고,
+            <br />
+            <em>원도심에서 한 끼.</em>
+          </h1>
+          <p className="home-deck">
+            산과 강, 오래된 마당과 시장. 원주에서 오늘 실제로 할 수 있는 일을
+            사진과 동선으로 골라보세요.
+          </p>
+          <a className="button button--light" href="/courses/west-scene">
+            서부 자연부터 시작하기 <Arrow />
+          </a>
+          <span className="home-date">
+            {dateLabel()} · 첫 방문자를 위한 원주 편집호
+          </span>
+        </div>
+        <div className="home-masthead-photo">
+          <img
+            src="/gangwon-gamyeong-evening.jpg"
+            alt="저녁빛이 내려앉은 강원감영"
+          />
+          <div className="photo-caption">
+            <b>표지 사진</b>
+            <span>강원감영 · 오래된 마당에서 원도심을 시작하다</span>
+            <small>Wikimedia Commons · 공개 라이선스 확인</small>
+          </div>
+        </div>
+      </section>
+      <WeatherMini weather={city.weather} phase={weatherState} />
+      <section className="home-choose">
+        <div className="home-choose-lead">
+          <span className="section-number">01</span>
+          <p className="eyebrow">오늘의 선택</p>
+          <h2>
+            원주를
+            <br />
+            <em>어떻게 볼까요?</em>
+          </h2>
+          <p>
+            관광지 이름부터 고르지 않아도 됩니다. 지금의 기분에 가까운 장면을
+            선택하면 다음 행동을 이어드립니다.
+          </p>
+        </div>
+        <div className="choose-list">
+          {[
+            [
+              "/places/sogeumsan",
+              "높이를 걷고 싶을 때",
+              "절벽·다리·삼산천",
+              "river",
+              "sogeumsan",
+            ],
+            [
+              "/places/gangwon-gamyeong",
+              "오래된 도시를 읽고 싶을 때",
+              "감영·문·시장",
+              "forest",
+              "gangwon-gamyeong",
+            ],
+            [
+              "/eat",
+              "도착하자마자 먹고 싶을 때",
+              "중앙시장·자유시장",
+              "market",
+              "jungang-market",
+            ],
+          ].map(([href, title, detail, tone, slug], i) => {
+            const place = placeFor(slug);
+            return (
+              <a
+                className={`choose-row choose-row--${tone}`}
+                href={href}
+                key={href}
+              >
+                <span>0{i + 1}</span>
+                <div>
+                  <strong>{title}</strong>
+                  <small>{detail}</small>
+                </div>
+                {place.image ? (
+                  <img src={place.image} alt="" />
+                ) : (
+                  <i>{place.tags[0]}</i>
+                )}
+                <Arrow />
+              </a>
+            );
+          })}
+        </div>
+      </section>
+      <section className="home-eat">
+        <div className="eat-story-photo">
+          <img src="/wonju-market.jpg" alt="원주 자유시장 만두 가게" />
+          <small>자유시장 참고 사진 · 최광모 · CC BY-SA</small>
+        </div>
+        <div className="eat-story-copy">
+          <span className="section-number">02</span>
+          <p className="eyebrow">먹고 마시기</p>
+          <h2>
+            사진보다 먼저,
+            <br />
+            <em>시장에 도착하기.</em>
+          </h2>
+          <p>
+            원주에서의 먹거리는 검색 결과 하나로 끝나지 않습니다. 중앙시장과
+            자유시장을 구분해 걷고, 오늘 열려 있는 점포에서 한 끼를 고릅니다.
+          </p>
+          <div className="food-notes">
+            <span>만두</span>
+            <span>칼국수</span>
+            <span>시장 골목</span>
+          </div>
+          <a className="text-link text-link--dark" href="/eat">
+            원주 시장의 결 보기 <Arrow />
+          </a>
+        </div>
+      </section>
+      <section className="home-courses">
+        <div className="home-courses-head">
+          <div>
+            <span className="section-number">03</span>
+            <p className="eyebrow">하루 코스</p>
+            <h2>
+              장소가 아니라,
+              <br />
+              <em>순서를 고르세요.</em>
+            </h2>
+          </div>
+          <p>
+            원주는 한 곳을 보고 돌아오는 도시가 아닙니다. 걷는 부담과 식사
+            시점을 함께 적은 다섯 가지 하루를 비교해보세요.
+          </p>
+          <a className="text-link" href="/courses">
+            다섯 코스 비교하기 <Arrow />
+          </a>
+        </div>
+        <div className="course-track">
+          {COURSES.map((course, i) => (
+            <a
+              href={`/courses/${course.slug}`}
+              className={`home-course home-course--${course.tone}`}
+              key={course.slug}
+            >
+              <span>0{i + 1}</span>
+              <div className="course-thumbs">
+                {course.places.map((slug) => (
+                  <Photo place={placeFor(slug)} key={slug} />
+                ))}
+              </div>
+              <h3>{course.label}</h3>
+              <strong>{course.title}</strong>
+              <small>{course.meta}</small>
+              <Arrow />
+            </a>
+          ))}
+        </div>
+      </section>
+      <section className="home-now">
+        <div className="home-now-intro">
+          <span className="section-number">04</span>
+          <p className="eyebrow">지금 원주</p>
+          <h2>
+            이번 계절의
+            <br />
+            <em>다음 이유.</em>
+          </h2>
+          <p>
+            일정이 있는 주말이라면 공식 공지를 먼저 확인하세요. 행사와 상시
+            장소를 섞어 여행의 밀도를 만듭니다.
+          </p>
+          <a className="button button--outline" href="/now">
+            이번 달 일정 보기 <Arrow />
+          </a>
+        </div>
+        <div className="event-list">
+          {UPCOMING_EVENTS.map((event) => (
+            <a
+              href={event.source}
+              target="_blank"
+              rel="noreferrer"
+              className="event-line"
+              key={event.title}
+            >
+              <time>{event.date}</time>
+              <div>
+                <strong>{event.title}</strong>
+                <span>{event.place}</span>
+              </div>
+              <Arrow />
+            </a>
+          ))}
+        </div>
+      </section>
+      <section className="home-prep">
+        <p className="eyebrow">출발 전 5분</p>
+        <h2>
+          지도·날씨·저장한 장소를
+          <br />
+          <em>한 번에 확인하세요.</em>
+        </h2>
+        <div>
+          <a href="/map">
+            원주 지도 <Arrow />
+          </a>
+          <a href="/plan/weather">
+            오늘 날씨 <Arrow />
+          </a>
+          <a href="/saved">
+            저장한 여행 <Arrow />
+          </a>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function Places({
+  saved,
+  onSave,
+  detailSlug,
+}: {
+  saved: Set<string>;
+  onSave: (id: string) => void;
+  detailSlug?: string;
+}) {
   const [filter, setFilter] = useState("전체");
-  if (detailSlug) { const place = placeFor(detailSlug); const course = COURSES.find((item) => item.places.some((slug) => slug === place.slug)) ?? COURSES[0]; return <main className={`place-detail-page place-detail-page--${place.accent}`}><div className="place-detail-top"><div className="place-detail-heading"><p className="eyebrow">PLACE NOTE · {place.region}</p><h1>{place.name}</h1><p className="place-lead">{place.line}</p><div className="tag-row">{place.tags.map((tag) => <span key={tag}>{tag}</span>)}<span>{place.type}</span></div><div className="detail-actions"><a className="button button--dark" href="#visit">방문 정보 보기 <Arrow /></a><SaveButton id={place.slug} saved={saved.has(place.slug)} onSave={onSave} /></div></div><Photo place={place} className="place-detail-photo" /></div><div className="place-detail-body"><article className="place-reading"><p className="reading-kicker">이 장소에서 시간을 쓰는 법</p><h2>{place.action}</h2><p className="reading-lede">{place.body}</p><div className="visit-sequence"><div><b>01</b><h3>먼저 보이는 것</h3><p>{place.region === "원도심" ? "문과 간판, 골목의 방향을 먼저 살핍니다." : place.region === "예술과 책" ? "작품보다 공간의 결을 먼저 따라갑니다." : "도착하자마자 전망을 소비하지 않고, 풍경으로 들어가는 첫 동작을 고릅니다."}</p></div><div><b>02</b><h3>그다음 할 일</h3><p>{place.action}. 사진에 담기지 않는 높이·빛·소리를 천천히 확인하세요.</p></div><div><b>03</b><h3>다음 장면</h3><p>{place.slug.includes("market") || place.slug === "gangwon-gamyeong" ? "시장으로 이어 한 끼를 고르거나 원도심 산책을 계속합니다." : "실내 대안 또는 다음 장소의 운영 정보를 확인하고 하루를 이어갑니다."}</p></div></div><section className="place-nearby"><p className="eyebrow">NEXT ACTION</p><h2>이 장소에서 이어가기</h2><div className="nearby-actions"><a href={`/eat?q=${encodeURIComponent(place.name)}`}><strong>근처 먹거리 검색</strong><span>현재 조회 결과를 별도로 확인 <Arrow /></span></a><a href={`/courses/${course.slug}`}><strong>{course.label}</strong><span>{course.title} <Arrow /></span></a></div></section></article><aside className="place-visit" id="visit"><div className="visit-map"><img src="/wonju-map.png" alt="원주 행정동 지도" /><span>{place.region}</span></div><div className="visit-facts"><p className="eyebrow">가기 전에</p><dl><div><dt>확인할 것</dt><dd>{place.visit}</dd></div><div><dt>공식 정보</dt><dd><Source href={place.source}>원주관광 원문 열기</Source></dd></div><div><dt>사진 기준</dt><dd>{place.credit ?? "사진 준비 중 · 운영 정보는 공식 안내에서 확인"}</dd></div></dl></div></aside></div></main>; }
-  const filters = ["전체", "풍경", "예술", "역사", "시장"]; const filtered = filter === "전체" ? PLACES : PLACES.filter((place) => place.tags.includes(filter) || place.type.includes(filter));
-  return <main className="places-page"><div className="places-intro"><div><p className="eyebrow">WHERE TO GO · {PLACES.length} PLACES</p><h1>원주의 장소를<br /><em>경험으로<br />고르세요.</em></h1></div><p>소금산의 높이, 감영의 마당, 시장의 한 끼, 한지와 문학의 시간을 한 목록에 섞지 않았습니다. 지금 하고 싶은 일에 가까운 장소부터 읽어보세요.</p></div><div className="place-filters" role="group" aria-label="장소 유형 필터">{filters.map((item) => <button className={filter === item ? "active" : ""} onClick={() => setFilter(item)} key={item}>{item}</button>)}<span>{filtered.length}곳</span></div><div className="places-feature"><Photo place={placeFor("museum-san")} /><div><p className="eyebrow">EDITOR&apos;S PICK · 서부 자연</p><h2>산과 건축을<br /><em>한 번에 보는 날.</em></h2><p>큰 풍경 뒤에 조용한 실내 장면이 필요하다면 뮤지엄 SAN을 붙여보세요.</p><a className="text-link" href="/places/museum-san">뮤지엄 SAN 읽기 <Arrow /></a></div></div><div className="places-shelf">{filtered.map((place, index) => <a className={`place-shelf-row place-shelf-row--${place.accent}`} href={`/places/${place.slug}`} key={place.slug}><span className="shelf-index">{String(index + 1).padStart(2, "0")}</span><div className="shelf-photo"><Photo place={place} /></div><div><p className="eyebrow">{place.region} · {place.type}</p><h2>{place.name}</h2><p>{place.line}</p><small>{place.action}</small></div><span className="shelf-arrow"><Arrow /></span></a>)}</div></main>;
+  if (detailSlug) {
+    const place = placeFor(detailSlug);
+    const course =
+      COURSES.find((item) => item.places.some((slug) => slug === place.slug)) ??
+      COURSES[0];
+    return (
+      <main className={`place-detail-page place-detail-page--${place.accent}`}>
+        <div className="place-detail-top">
+          <div className="place-detail-heading">
+            <p className="eyebrow">PLACE NOTE · {place.region}</p>
+            <h1>{place.name}</h1>
+            <p className="place-lead">{place.line}</p>
+            <div className="tag-row">
+              {place.tags.map((tag) => (
+                <span key={tag}>{tag}</span>
+              ))}
+              <span>{place.type}</span>
+            </div>
+            <div className="detail-actions">
+              <a className="button button--dark" href="#visit">
+                방문 정보 보기 <Arrow />
+              </a>
+              <SaveButton
+                id={place.slug}
+                saved={saved.has(place.slug)}
+                onSave={onSave}
+              />
+            </div>
+          </div>
+          <Photo place={place} className="place-detail-photo" />
+        </div>
+        <div className="place-detail-body">
+          <article className="place-reading">
+            <p className="reading-kicker">이 장소에서 시간을 쓰는 법</p>
+            <h2>{place.action}</h2>
+            <p className="reading-lede">{place.body}</p>
+            <div className="visit-sequence">
+              <div>
+                <b>01</b>
+                <h3>먼저 보이는 것</h3>
+                <p>
+                  {place.region === "원도심"
+                    ? "문과 간판, 골목의 방향을 먼저 살핍니다."
+                    : place.region === "예술과 책"
+                      ? "작품보다 공간의 결을 먼저 따라갑니다."
+                      : "도착하자마자 전망을 소비하지 않고, 풍경으로 들어가는 첫 동작을 고릅니다."}
+                </p>
+              </div>
+              <div>
+                <b>02</b>
+                <h3>그다음 할 일</h3>
+                <p>
+                  {place.action}. 사진에 담기지 않는 높이·빛·소리를 천천히
+                  확인하세요.
+                </p>
+              </div>
+              <div>
+                <b>03</b>
+                <h3>다음 장면</h3>
+                <p>
+                  {place.slug.includes("market") ||
+                  place.slug === "gangwon-gamyeong"
+                    ? "시장으로 이어 한 끼를 고르거나 원도심 산책을 계속합니다."
+                    : "실내 대안 또는 다음 장소의 운영 정보를 확인하고 하루를 이어갑니다."}
+                </p>
+              </div>
+            </div>
+            <section className="place-nearby">
+              <p className="eyebrow">NEXT ACTION</p>
+              <h2>이 장소에서 이어가기</h2>
+              <div className="nearby-actions">
+                <a href={`/eat?q=${encodeURIComponent(place.name)}`}>
+                  <strong>근처 먹거리 검색</strong>
+                  <span>
+                    현재 조회 결과를 별도로 확인 <Arrow />
+                  </span>
+                </a>
+                <a href={`/courses/${course.slug}`}>
+                  <strong>{course.label}</strong>
+                  <span>
+                    {course.title} <Arrow />
+                  </span>
+                </a>
+              </div>
+            </section>
+          </article>
+          <aside className="place-visit" id="visit">
+            <div className="visit-map">
+              <img src="/wonju-map.png" alt="원주 행정동 지도" />
+              <span>{place.region}</span>
+            </div>
+            <div className="visit-facts">
+              <p className="eyebrow">가기 전에</p>
+              <dl>
+                <div>
+                  <dt>확인할 것</dt>
+                  <dd>{place.visit}</dd>
+                </div>
+                <div>
+                  <dt>공식 정보</dt>
+                  <dd>
+                    <Source href={place.source}>원주관광 원문 열기</Source>
+                  </dd>
+                </div>
+                <div>
+                  <dt>사진 기준</dt>
+                  <dd>
+                    {place.credit ??
+                      "사진 준비 중 · 운영 정보는 공식 안내에서 확인"}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </aside>
+        </div>
+      </main>
+    );
+  }
+  const filters = ["전체", "풍경", "예술", "역사", "시장"];
+  const filtered =
+    filter === "전체"
+      ? PLACES
+      : PLACES.filter(
+          (place) => place.tags.includes(filter) || place.type.includes(filter),
+        );
+  return (
+    <main className="places-page">
+      <div className="places-intro">
+        <div>
+          <p className="eyebrow">WHERE TO GO · {PLACES.length} PLACES</p>
+          <h1>
+            원주의 장소를
+            <br />
+            <em>
+              경험으로
+              <br />
+              고르세요.
+            </em>
+          </h1>
+        </div>
+        <p>
+          소금산의 높이, 감영의 마당, 시장의 한 끼, 한지와 문학의 시간을 한
+          목록에 섞지 않았습니다. 지금 하고 싶은 일에 가까운 장소부터
+          읽어보세요.
+        </p>
+      </div>
+      <div className="place-filters" role="group" aria-label="장소 유형 필터">
+        {filters.map((item) => (
+          <button
+            className={filter === item ? "active" : ""}
+            onClick={() => setFilter(item)}
+            key={item}
+          >
+            {item}
+          </button>
+        ))}
+        <span>{filtered.length}곳</span>
+      </div>
+      <div className="places-feature">
+        <Photo place={placeFor("museum-san")} />
+        <div>
+          <p className="eyebrow">EDITOR&apos;S PICK · 서부 자연</p>
+          <h2>
+            산과 건축을
+            <br />
+            <em>한 번에 보는 날.</em>
+          </h2>
+          <p>
+            큰 풍경 뒤에 조용한 실내 장면이 필요하다면 뮤지엄 SAN을 붙여보세요.
+          </p>
+          <a className="text-link" href="/places/museum-san">
+            뮤지엄 SAN 읽기 <Arrow />
+          </a>
+        </div>
+      </div>
+      <div className="places-shelf">
+        {filtered.map((place, index) => (
+          <a
+            className={`place-shelf-row place-shelf-row--${place.accent}`}
+            href={`/places/${place.slug}`}
+            key={place.slug}
+          >
+            <span className="shelf-index">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <div className="shelf-photo">
+              <Photo place={place} />
+            </div>
+            <div>
+              <p className="eyebrow">
+                {place.region} · {place.type}
+              </p>
+              <h2>{place.name}</h2>
+              <p>{place.line}</p>
+              <small>{place.action}</small>
+            </div>
+            <span className="shelf-arrow">
+              <Arrow />
+            </span>
+          </a>
+        ))}
+      </div>
+    </main>
+  );
 }
 
 function Eat() {
-  const [query, setQuery] = useState(""); const [result, setResult] = useState<{ status: string; detail?: string; places?: Array<{ id: string; name: string; category: string | null; address: string | null; roadAddress: string | null; phone: string | null; placeUrl: string }> } | null>(null); const [loading, setLoading] = useState(false);
-  useEffect(() => { const q = new URLSearchParams(window.location.search).get("q"); if (q) setQuery(q); }, []);
-  async function search() { if (!query.trim()) return; setLoading(true); try { const response = await fetch(`/api/places?q=${encodeURIComponent(query)}`); setResult(await response.json()); } catch { setResult({ status: "UNAVAILABLE", detail: "검색 연결을 확인할 수 없습니다." }); } finally { setLoading(false); } }
-  return <main className="eat-page"><div className="eat-intro"><div><p className="eyebrow">EAT & DRINK · 원도심의 한 끼</p><h1>원주를<br /><em>맛으로 기억하기.</em></h1><p>원주 시장의 한 끼는 골목을 걷는 데서 시작합니다. 중앙시장과 자유시장을 살펴보고, 오늘 먹을 곳을 찾아보세요.</p></div><div className="eat-intro-photo"><img src="/wonju-market.jpg" alt="원주 자유시장 만두 가게" /><small>시장 풍경 참고 사진 · 특정 점포 메뉴 아님</small></div></div><section className="market-reading"><div className="market-reading-head"><span className="section-number">01</span><p className="eyebrow">시장 산책</p><h2>중앙시장과 자유시장,<br /><em>같은 한 끼는 아닙니다.</em></h2><p>중앙시장은 골목과 점포를 발견하는 재미가 있고, 자유시장은 도착해서 바로 한 끼를 고르기 좋습니다.</p></div><div className="market-choices"><a className="market-choice--quiet" href="/places/jungang-market"><span>01 · 중앙시장·미로예술시장</span><strong>골목을 한 번 더<br />돌아보기</strong><small>시장 공간을 걷고 현장에서 점포를 고르는 경험</small><Arrow /></a><a href="/places/jayu-market"><Photo place={placeFor("jayu-market")} className="market-choice-photo" /><span>02 · 자유시장</span><strong>도착해서 바로<br />한 끼 고르기</strong><small>만두·칼국수 등 그날 열린 선택지를 확인</small><Arrow /></a></div></section><section className="eat-search"><div className="eat-search-copy"><p className="eyebrow">LIVE PLACE SEARCH</p><h2>시장 산책 뒤,<br /><em>오늘 먹을 곳을 찾아보세요.</em></h2><p>원주 주소가 확인된 음식점과 카페를 검색합니다. 결과를 열어 메뉴와 영업 정보를 직접 확인해보세요.</p><div className="query-chips">{["중앙시장 만두", "강원감영 카페", "원주 한식"].map((item) => <button key={item} onClick={() => setQuery(item)}>{item}</button>)}</div></div><div className="eat-search-box"><div className="search-form"><input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void search(); }} placeholder="예: 강원감영 근처 카페" aria-label="원주 음식 장소 검색" /><button onClick={() => void search()} disabled={loading}>{loading ? "확인 중" : "검색"} <Arrow /></button></div>{loading ? <div className="search-live-note" role="status">장소를 찾고 있어요.</div> : result ? <div className="search-result"><div className="result-status"><strong>{result.status !== "LIVE" ? "지금 장소 검색에 연결할 수 없습니다" : result.places?.length ? `${result.places.length}곳을 찾았어요` : "이 검색어로 확인된 장소가 없습니다"}</strong><span>{result.detail}</span></div>{result.places?.length ? result.places.map((place) => <a className="result-row" href={place.placeUrl} target="_blank" rel="noreferrer" key={place.id}><div><strong>{place.name}</strong><span>{place.category ?? "장소"}</span></div><p>{place.roadAddress ?? place.address ?? "주소 없음"}{place.phone ? ` · ${place.phone}` : ""}</p><Arrow /></a>) : <div className="search-empty-note">“중앙시장 만두”, “강원감영 카페”처럼 장소와 먹거리를 함께 입력해보세요.</div>}</div> : <div className="search-empty-note">검색어를 입력하면 원주 음식점과 카페를 찾아드려요.</div>}</div></section><section className="eat-ritual"><p className="eyebrow">시장에 도착하면</p><div><span>01</span><strong>간판보다 골목을 먼저 보기</strong><span>02</span><strong>오늘 열려 있는 점포 확인하기</strong><span>03</span><strong>먹은 뒤 다음 시장으로 걷기</strong></div></section></main>;
+  const [query, setQuery] = useState("");
+  const [result, setResult] = useState<{
+    status: string;
+    detail?: string;
+    places?: Array<{
+      id: string;
+      name: string;
+      category: string | null;
+      address: string | null;
+      roadAddress: string | null;
+      phone: string | null;
+      placeUrl: string;
+    }>;
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q");
+    if (q) setQuery(q);
+  }, []);
+  async function search() {
+    if (!query.trim()) return;
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `/api/places?q=${encodeURIComponent(query)}`,
+      );
+      setResult(await response.json());
+    } catch {
+      setResult({
+        status: "UNAVAILABLE",
+        detail: "검색 연결을 확인할 수 없습니다.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <main className="eat-page">
+      <div className="eat-intro">
+        <div>
+          <p className="eyebrow">EAT & DRINK · 원도심의 한 끼</p>
+          <h1>
+            원주를
+            <br />
+            <em>맛으로 기억하기.</em>
+          </h1>
+          <p>
+            원주 시장의 한 끼는 골목을 걷는 데서 시작합니다. 중앙시장과
+            자유시장을 살펴보고, 오늘 먹을 곳을 찾아보세요.
+          </p>
+        </div>
+        <div className="eat-intro-photo">
+          <img src="/wonju-market.jpg" alt="원주 자유시장 만두 가게" />
+          <small>시장 풍경 참고 사진 · 특정 점포 메뉴 아님</small>
+        </div>
+      </div>
+      <section className="market-reading">
+        <div className="market-reading-head">
+          <span className="section-number">01</span>
+          <p className="eyebrow">시장 산책</p>
+          <h2>
+            중앙시장과 자유시장,
+            <br />
+            <em>같은 한 끼는 아닙니다.</em>
+          </h2>
+          <p>
+            중앙시장은 골목과 점포를 발견하는 재미가 있고, 자유시장은 도착해서
+            바로 한 끼를 고르기 좋습니다.
+          </p>
+        </div>
+        <div className="market-choices">
+          <a className="market-choice--quiet" href="/places/jungang-market">
+            <span>01 · 중앙시장·미로예술시장</span>
+            <strong>
+              골목을 한 번 더<br />
+              돌아보기
+            </strong>
+            <small>시장 공간을 걷고 현장에서 점포를 고르는 경험</small>
+            <Arrow />
+          </a>
+          <a href="/places/jayu-market">
+            <Photo
+              place={placeFor("jayu-market")}
+              className="market-choice-photo"
+            />
+            <span>02 · 자유시장</span>
+            <strong>
+              도착해서 바로
+              <br />한 끼 고르기
+            </strong>
+            <small>만두·칼국수 등 그날 열린 선택지를 확인</small>
+            <Arrow />
+          </a>
+        </div>
+      </section>
+      <section className="eat-search">
+        <div className="eat-search-copy">
+          <p className="eyebrow">LIVE PLACE SEARCH</p>
+          <h2>
+            시장 산책 뒤,
+            <br />
+            <em>오늘 먹을 곳을 찾아보세요.</em>
+          </h2>
+          <p>
+            원주 주소가 확인된 음식점과 카페를 검색합니다. 결과를 열어 메뉴와
+            영업 정보를 직접 확인해보세요.
+          </p>
+          <div className="query-chips">
+            {["중앙시장 만두", "강원감영 카페", "원주 한식"].map((item) => (
+              <button key={item} onClick={() => setQuery(item)}>
+                {item}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="eat-search-box">
+          <div className="search-form">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void search();
+              }}
+              placeholder="예: 강원감영 근처 카페"
+              aria-label="원주 음식 장소 검색"
+            />
+            <button onClick={() => void search()} disabled={loading}>
+              {loading ? "확인 중" : "검색"} <Arrow />
+            </button>
+          </div>
+          {loading ? (
+            <div className="search-live-note" role="status">
+              장소를 찾고 있어요.
+            </div>
+          ) : result ? (
+            <div className="search-result">
+              <div className="result-status">
+                <strong>
+                  {result.status !== "LIVE"
+                    ? "지금 장소 검색에 연결할 수 없습니다"
+                    : result.places?.length
+                      ? `${result.places.length}곳을 찾았어요`
+                      : "이 검색어로 확인된 장소가 없습니다"}
+                </strong>
+                <span>{result.detail}</span>
+              </div>
+              {result.places?.length ? (
+                result.places.map((place) => (
+                  <a
+                    className="result-row"
+                    href={place.placeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    key={place.id}
+                  >
+                    <div>
+                      <strong>{place.name}</strong>
+                      <span>{place.category ?? "장소"}</span>
+                    </div>
+                    <p>
+                      {place.roadAddress ?? place.address ?? "주소 없음"}
+                      {place.phone ? ` · ${place.phone}` : ""}
+                    </p>
+                    <Arrow />
+                  </a>
+                ))
+              ) : (
+                <div className="search-empty-note">
+                  “중앙시장 만두”, “강원감영 카페”처럼 장소와 먹거리를 함께
+                  입력해보세요.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="search-empty-note">
+              검색어를 입력하면 원주 음식점과 카페를 찾아드려요.
+            </div>
+          )}
+        </div>
+      </section>
+      <section className="eat-ritual">
+        <p className="eyebrow">시장에 도착하면</p>
+        <div>
+          <span>01</span>
+          <strong>간판보다 골목을 먼저 보기</strong>
+          <span>02</span>
+          <strong>오늘 열려 있는 점포 확인하기</strong>
+          <span>03</span>
+          <strong>먹은 뒤 다음 시장으로 걷기</strong>
+        </div>
+      </section>
+    </main>
+  );
 }
 
-function Courses({ saved, onSave, detailSlug }: { saved: Set<string>; onSave: (id: string) => void; detailSlug?: string }) {
-  if (detailSlug) { const course = COURSES.find((item) => item.slug === detailSlug) ?? COURSES[0]; return <main className={`course-detail-page course-detail-page--${course.tone}`}><div className="course-detail-intro"><p className="eyebrow">DAY COURSE · {course.label}</p><h1>{course.title}</h1><p className="course-detail-lede">{course.note}</p><div className="course-meta-row"><span>{course.meta}</span><SaveButton id={`course:${course.slug}`} saved={saved.has(`course:${course.slug}`)} onSave={onSave} /></div></div><div className="course-journey"><div className="journey-header"><span>출발부터 다음 장면까지</span><small>운영 정보는 출발 전에 다시 확인하세요.</small></div>{course.places.map((slug, index) => { const place = placeFor(slug); return <div className="journey-step" key={slug}><div className="journey-count">{String(index + 1).padStart(2, "0")}</div><Photo place={place} /><div className="journey-copy"><p className="eyebrow">{index === 0 ? "START" : "NEXT SCENE"} · {place.region}</p><h2>{place.name}</h2><p>{place.line}</p><a className="text-link" href={`/places/${place.slug}`}>장소에서 할 일 보기 <Arrow /></a></div>{index < course.places.length - 1 ? <div className="journey-connector"><span>이동</span><b>{course.tone === "market" ? "도보로 이어가기" : "다음 장소의 운영 확인"}</b></div> : null}</div>; })}<div className="course-meal"><span>식사 시점</span><strong>{course.tone === "market" ? "자유시장 또는 중앙시장 안에서 오늘의 한 끼를 선택" : "원도심으로 돌아와 시장 검색을 열거나, 공식 운영 정보를 확인한 뒤 결정"}</strong><a href="/eat">먹거리 탐색 <Arrow /></a></div></div><aside className="course-notes"><p className="eyebrow">TRAVEL NOTES</p><h2>출발 전에 확인할 것</h2><ul><li>운영시간·휴무·예약은 각 장소의 공식 페이지에서 다시 확인합니다.</li><li>이 페이지의 연결선은 도로 경로가 아니라 방문 순서입니다.</li><li>날씨가 바뀌면 야외 장소와 실내 장소의 순서를 바꿔보세요.</li></ul><a className="button button--dark" href="/plan">지도·날씨 확인 <Arrow /></a></aside></main>; }
-  return <main className="courses-page"><div className="courses-intro"><div><p className="eyebrow">DAY COURSES · {COURSES.length} ROUTES</p><h1>원주의 하루는<br /><em>순서가 있습니다.</em></h1></div><p>단순히 관광지를 나열하지 않았습니다. 왜 이 순서인지, 어디서 먹는지, 비가 오면 무엇을 바꿀지까지 적었습니다.</p></div><div className="course-choices">{COURSES.map((course, index) => <a className={`course-choice course-choice--${course.tone}`} href={`/courses/${course.slug}`} key={course.slug}><div className="choice-top"><span>0{index + 1}</span><p>{course.label}</p><Arrow /></div><div className="choice-photo-strip">{course.places.map((slug) => <Photo place={placeFor(slug)} key={slug} />)}</div><h2>{course.title}</h2><p>{course.note}</p><footer><span>{course.meta}</span><b>코스 열기</b></footer></a>)}</div><div className="course-principle"><p className="eyebrow">이 코스의 원칙</p><strong>시간을 절약하는 길보다,<br />원주를 기억하는 순서를 설계합니다.</strong><a className="text-link" href="/map">지도에서 장소 간격 보기 <Arrow /></a></div></main>;
+function Courses({
+  saved,
+  onSave,
+  detailSlug,
+}: {
+  saved: Set<string>;
+  onSave: (id: string) => void;
+  detailSlug?: string;
+}) {
+  if (detailSlug) {
+    const course =
+      COURSES.find((item) => item.slug === detailSlug) ?? COURSES[0];
+    return (
+      <main className={`course-detail-page course-detail-page--${course.tone}`}>
+        <div className="course-detail-intro">
+          <p className="eyebrow">DAY COURSE · {course.label}</p>
+          <h1>{course.title}</h1>
+          <p className="course-detail-lede">{course.note}</p>
+          <div className="course-meta-row">
+            <span>{course.meta}</span>
+            <SaveButton
+              id={`course:${course.slug}`}
+              saved={saved.has(`course:${course.slug}`)}
+              onSave={onSave}
+            />
+          </div>
+        </div>
+        <div className="course-journey">
+          <div className="journey-header">
+            <span>출발부터 다음 장면까지</span>
+            <small>운영 정보는 출발 전에 다시 확인하세요.</small>
+          </div>
+          {course.places.map((slug, index) => {
+            const place = placeFor(slug);
+            return (
+              <div className="journey-step" key={slug}>
+                <div className="journey-count">
+                  {String(index + 1).padStart(2, "0")}
+                </div>
+                <Photo place={place} />
+                <div className="journey-copy">
+                  <p className="eyebrow">
+                    {index === 0 ? "START" : "NEXT SCENE"} · {place.region}
+                  </p>
+                  <h2>{place.name}</h2>
+                  <p>{place.line}</p>
+                  <a className="text-link" href={`/places/${place.slug}`}>
+                    장소에서 할 일 보기 <Arrow />
+                  </a>
+                </div>
+                {index < course.places.length - 1 ? (
+                  <div className="journey-connector">
+                    <span>이동</span>
+                    <b>
+                      {course.tone === "market"
+                        ? "도보로 이어가기"
+                        : "다음 장소의 운영 확인"}
+                    </b>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+          <div className="course-meal">
+            <span>식사 시점</span>
+            <strong>
+              {course.tone === "market"
+                ? "자유시장 또는 중앙시장 안에서 오늘의 한 끼를 선택"
+                : "원도심으로 돌아와 시장 검색을 열거나, 공식 운영 정보를 확인한 뒤 결정"}
+            </strong>
+            <a href="/eat">
+              먹거리 탐색 <Arrow />
+            </a>
+          </div>
+        </div>
+        <aside className="course-notes">
+          <p className="eyebrow">TRAVEL NOTES</p>
+          <h2>출발 전에 확인할 것</h2>
+          <ul>
+            <li>
+              운영시간·휴무·예약은 각 장소의 공식 페이지에서 다시 확인합니다.
+            </li>
+            <li>이 페이지의 연결선은 도로 경로가 아니라 방문 순서입니다.</li>
+            <li>날씨가 바뀌면 야외 장소와 실내 장소의 순서를 바꿔보세요.</li>
+          </ul>
+          <a className="button button--dark" href="/plan">
+            지도·날씨 확인 <Arrow />
+          </a>
+        </aside>
+      </main>
+    );
+  }
+  return (
+    <main className="courses-page">
+      <div className="courses-intro">
+        <div>
+          <p className="eyebrow">DAY COURSES · {COURSES.length} ROUTES</p>
+          <h1>
+            원주의 하루는
+            <br />
+            <em>순서가 있습니다.</em>
+          </h1>
+        </div>
+        <p>
+          단순히 관광지를 나열하지 않았습니다. 왜 이 순서인지, 어디서 먹는지,
+          비가 오면 무엇을 바꿀지까지 적었습니다.
+        </p>
+      </div>
+      <div className="course-choices">
+        {COURSES.map((course, index) => (
+          <a
+            className={`course-choice course-choice--${course.tone}`}
+            href={`/courses/${course.slug}`}
+            key={course.slug}
+          >
+            <div className="choice-top">
+              <span>0{index + 1}</span>
+              <p>{course.label}</p>
+              <Arrow />
+            </div>
+            <div className="choice-photo-strip">
+              {course.places.map((slug) => (
+                <Photo place={placeFor(slug)} key={slug} />
+              ))}
+            </div>
+            <h2>{course.title}</h2>
+            <p>{course.note}</p>
+            <footer>
+              <span>{course.meta}</span>
+              <b>코스 열기</b>
+            </footer>
+          </a>
+        ))}
+      </div>
+      <div className="course-principle">
+        <p className="eyebrow">이 코스의 원칙</p>
+        <strong>
+          시간을 절약하는 길보다,
+          <br />
+          원주를 기억하는 순서를 설계합니다.
+        </strong>
+        <a className="text-link" href="/map">
+          지도에서 장소 간격 보기 <Arrow />
+        </a>
+      </div>
+    </main>
+  );
 }
 
-function Now({ city }: { city: CitySnapshot }) { const notices = city.notices.items.slice(0, 4); return <main className="listing-page now-page"><div className="page-intro page-intro--split"><div><span className="eyebrow">WONJU NOW · {dateLabel()}</span><h1>이번 달<br /><em>원주.</em></h1></div><p>다가오는 일정과 공식 소식을 날짜·출처와 함께 읽습니다. 행사 없는 날에도 상시 장소와 코스는 계속 열려 있습니다.</p></div><section className="now-events"><div className="section-heading"><span className="eyebrow">UPCOMING EVENTS</span><h2>다가오는 일정</h2></div>{UPCOMING_EVENTS.map((event) => <a className="now-event" href={event.source} target="_blank" rel="noreferrer" key={event.title}><time>{event.date}</time><div><h3>{event.title}</h3><p>{event.place}</p></div><span>공식 일정 <Arrow /></span></a>)}</section><section className="official-notices"><div className="section-heading"><span className="eyebrow">OFFICIAL NOTICE</span><h2>원주시에서 새로 올라온 소식</h2></div>{notices.length ? notices.map((notice) => <a className="notice-row" href={notice.canonicalUrl} target="_blank" rel="noreferrer" key={notice.id}><time>{notice.publishedAt}</time><strong>{notice.title}</strong><span>{notice.department}<Arrow /></span></a>) : <div className="empty-state"><strong>현재 확인 가능한 소식이 없습니다.</strong><p>원주시청 공식 새소식에서 최신 내용을 확인하세요.</p><Source href={city.notices.sourceUrl}>원주시청 새소식</Source></div>}</section></main>; }
-function Plan({ city, weatherState }: { city: CitySnapshot; weatherState: WeatherPhase }) { const weather = city.weather; const updated = timeLabel(weather.fetchedAt); return <main className="listing-page plan-page"><div className="page-intro page-intro--split"><div><span className="eyebrow">TRAVEL PREP</span><h1>출발 전에<br /><em>확인할 것.</em></h1></div><p>오늘의 날씨와 이동 정보를 한 번에 확인하고, 원주에서 보낼 순서를 정해보세요.</p></div><section className={`prep-weather-feature prep-weather-feature--${weatherState}`}><MeteoconIcon weather={weather} phase={weatherState} size="large" /><div><span className="eyebrow">오늘 원주</span><h2>{weatherState === "loading" ? "날씨를 확인하는 중" : weather.temperature === null ? "날씨를 불러오지 못했어요" : `${weather.temperature}° · ${weatherLabel(weather)}`}</h2><p>{weatherTravelLine(weather, weatherState)}</p></div><div className="prep-weather-facts"><span>{weather.high === null ? "최고 —" : `최고 ${weather.high}°`} · {weather.low === null ? "최저 —" : `최저 ${weather.low}°`}</span><span>{weather.precipitationProbability === null ? "강수확률 —" : `강수확률 ${weather.precipitationProbability}%`}</span><small>{updated ? `업데이트 ${updated}` : weatherState === "loading" ? "날씨를 확인하고 있어요" : "현재 확인 불가"} · <Source href={weather.sourceUrl}>공식 예보</Source></small></div></section><div className="prep-grid"><a className="prep-card prep-card--water" href="/map"><span className="eyebrow">01 · MAP</span><h2>지도와 목적지</h2><p>원주 권역과 장소를 한눈에 보고, 상세에서 외부 길찾기로 이어가세요.</p><Arrow /></a><a className="prep-card" href="/plan/weather"><span className="eyebrow">02 · WEATHER</span><h2>오늘의 날씨</h2><strong>{weather.temperature === null ? "확인 불가" : `${weather.temperature}°`}</strong><p>{weatherLabel(weather)}</p><Arrow /></a><a className="prep-card" href="https://its.wonju.go.kr/" target="_blank" rel="noreferrer"><span className="eyebrow">03 · TRANSPORT</span><h2>원주시 교통정보센터</h2><p>도로 소통·버스·주차 정보의 공식 출발점입니다.</p><Arrow /></a><a className="prep-card" href="/sources"><span className="eyebrow">04 · SOURCES</span><h2>정보의 기준</h2><p>사진 사용권, 운영 정보, 실시간 provider의 상태를 확인하세요.</p><Arrow /></a></div></main>; }
-function Weather({ city, weatherState }: { city: CitySnapshot; weatherState: WeatherPhase }) { const weather = city.weather; const updated = timeLabel(weather.fetchedAt); return <main className="listing-page weather-page"><div className="page-intro page-intro--split"><div><span className="eyebrow">WONJU WEATHER</span><h1>오늘 원주의<br /><em>하늘.</em></h1></div><p>기온과 비 소식, 특보를 확인하고 오늘의 순서를 정해보세요.</p></div><div className={`weather-readout weather-readout--${weatherState}`}><div className="weather-current"><MeteoconIcon weather={weather} phase={weatherState} size="large" /><div><span className="eyebrow">CURRENT</span><strong>{weatherState === "loading" || weather.temperature === null ? "—" : `${weather.temperature}°`}</strong><h2>{weatherState === "loading" ? "날씨 확인 중" : weatherLabel(weather)}</h2><p>{updated ? `최근 확인 ${updated}` : weatherState === "loading" ? "날씨를 확인하고 있어요." : "현재 날씨를 불러오지 못했어요. 공식 예보를 열어보세요."}</p></div></div><div className="weather-facts"><div><span>최고 / 최저</span><b>{weather.high === null ? "—" : `${weather.high}°`} / {weather.low === null ? "—" : `${weather.low}°`}</b></div><div><span>비 올 확률</span><b>{weather.precipitationProbability === null ? "—" : `${weather.precipitationProbability}%`}</b></div><div><span>특보</span><b>{alertLabel(city.alerts)}</b></div></div></div><div className="status-note"><span className="status-dot" />{weatherState === "success" ? "LIVE" : weatherState === "partial" ? "일부 확인" : weatherState === "stale" ? "마지막 확인값" : weatherState === "loading" ? "확인 중" : "확인 불가"} · {weather.provider} <Source href={weather.sourceUrl}>공식 출처</Source></div></main>; }
-type MapPoint = { place: Place; latitude: number; longitude: number; placeUrl: string };
-function MapPage() { const [points, setPoints] = useState<MapPoint[]>([]); const [selected, setSelected] = useState<string | null>(null); const [scale, setScale] = useState(1); const [offset, setOffset] = useState({ x: 0, y: 0 }); const [drag, setDrag] = useState<{ x: number; y: number; ox: number; oy: number } | null>(null); const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading"); useEffect(() => { let active = true; void Promise.all(PLACES.map(async (place) => { try { const response = await fetch(`/api/places?q=${encodeURIComponent(place.name)}`); if (!response.ok) return null; const data = await response.json() as { places?: Array<{ name?: string; latitude?: number; longitude?: number; placeUrl?: string }> }; const match = data.places?.find((item) => typeof item.latitude === "number" && typeof item.longitude === "number" && typeof item.placeUrl === "string"); return match ? { place, latitude: match.latitude as number, longitude: match.longitude as number, placeUrl: match.placeUrl as string } : null; } catch { return null; } })).then((items) => { if (!active) return; const next = items.filter((item): item is MapPoint => Boolean(item)); setPoints(next); setStatus(next.length ? "ready" : "unavailable"); if (next[0]) setSelected(next[0].place.slug); }).catch(() => { if (active) setStatus("unavailable"); }); return () => { active = false; }; }, []); const bounds = useMemo(() => { const lats = points.map((point) => point.latitude); const lons = points.map((point) => point.longitude); return { minLat: Math.min(...lats, 37.25), maxLat: Math.max(...lats, 37.42), minLon: Math.min(...lons, 127.82), maxLon: Math.max(...lons, 128.02) }; }, [points]); const position = (point: MapPoint) => ({ left: `${((point.longitude - bounds.minLon) / Math.max(bounds.maxLon - bounds.minLon, .001)) * 86 + 7}%`, top: `${(1 - (point.latitude - bounds.minLat) / Math.max(bounds.maxLat - bounds.minLat, .001)) * 78 + 7}%` }); const selectedPoint = points.find((point) => point.place.slug === selected) ?? null; const selectedPlace = selectedPoint?.place ?? placeFor(selected ?? PLACES[0].slug); const directionsUrl = selectedPoint?.placeUrl ?? `https://map.kakao.com/?q=${encodeURIComponent(`${selectedPlace.name} 원주`)}`; return <main className="map-page"><div className="map-heading"><div><span className="eyebrow">WONJU PLACE MAP</span><h1>좌표가 확인된 곳부터<br /><em>지도에서 고르세요.</em></h1></div><p>원주 장소의 좌표를 Kakao Local에서 확인해 표시합니다. 점을 누르면 장소와 외부 길찾기로 이어지고, 목록을 누르면 지도가 함께 선택됩니다.</p></div><div className="map-layout"><div className="map-live-shell"><div className="map-live-toolbar"><span>{status === "loading" ? "장소 좌표를 확인하고 있어요" : status === "ready" ? `${points.length}곳의 좌표가 확인됐어요` : "좌표를 불러오지 못했어요"}</span><div><button type="button" onClick={() => setScale((value) => Math.min(2.4, value + .2))} aria-label="지도 확대">＋</button><button type="button" onClick={() => setScale((value) => Math.max(1, value - .2))} aria-label="지도 축소">－</button><button type="button" onClick={() => { setScale(1); setOffset({ x: 0, y: 0 }); }} aria-label="지도 초기화">초기화</button></div></div><div className="map-live-viewport" onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); setDrag({ x: event.clientX, y: event.clientY, ox: offset.x, oy: offset.y }); }} onPointerMove={(event) => { if (drag) setOffset({ x: drag.ox + event.clientX - drag.x, y: drag.oy + event.clientY - drag.y }); }} onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}><div className="map-live-surface" style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}><div className="map-grid" aria-hidden="true" /><div className="map-live-caption">원주 · 확인된 장소 좌표</div>{points.map((point) => <button type="button" className={`map-marker ${selected === point.place.slug ? "active" : ""}`} style={position(point)} onClick={() => setSelected(point.place.slug)} key={point.place.slug} aria-label={`${point.place.name} 선택`}><span>{point.place.name}</span></button>)}</div></div><div className="map-preview"><div><span>{selectedPlace.region} · {selectedPlace.type}</span><strong>{selectedPlace.name}</strong><p>{selectedPlace.line}</p></div><a href={`/places/${selectedPlace.slug}`}>상세 보기 <Arrow /></a><a href={directionsUrl} target="_blank" rel="noreferrer">외부 지도에서 길찾기 <Arrow /></a></div>{status === "unavailable" ? <div className="map-fallback">좌표를 확인하지 못한 장소는 지도에 표시하지 않았습니다. 목록에서 공식 상세를 열거나 외부 지도를 직접 확인해보세요.</div> : null}</div><div className="map-list"><span className="eyebrow">EDITORIAL PLACES</span><h2>지도에서 고를 수 있는 장면</h2>{PLACES.map((place) => <button type="button" className={`map-place ${selected === place.slug ? "active" : ""}`} onClick={() => setSelected(place.slug)} key={place.slug}><span>{place.region}</span><strong>{place.name}</strong><small>{place.line}</small><Arrow /></button>)}</div></div></main>; }
-function About({ city }: { city: CitySnapshot }) { return <main className="listing-page about-page"><div className="page-intro page-intro--split"><div><span className="eyebrow">ABOUT WONJU</span><h1>시간 위에 세워진<br /><em>원주.</em></h1></div><p>역사·사람·문학이 오늘의 장소와 어떻게 이어지는지 공식 자료를 따라 읽습니다.</p></div><div className="timeline">{HISTORY_TIMELINE.map((item) => <article key={item.year}><strong>{item.year}</strong><div><h2>{item.title}</h2><p>{item.text}</p></div></article>)}</div><div className="people-section"><div className="section-heading"><span className="eyebrow">PEOPLE OF WONJU</span><h2>도시를 만든 사람들</h2></div><div className="people-grid">{HISTORICAL_PEOPLE.map((person) => <a href={person.source} target="_blank" rel="noreferrer" key={person.name}><span>{person.label}</span><h3>{person.name}</h3><p>{person.text}</p><Arrow /></a>)}</div></div><div className="city-status"><span className="eyebrow">CITY DATA</span><h2>현재 숫자는 공식 기준일과 함께.</h2><p>인구 {city.population.population?.toLocaleString("ko-KR") ?? "현재 확인 불가"} · {city.population.period ?? "기준일 확인 불가"}</p><Source href={city.population.sourceUrl}>원주통계정보</Source></div></main>; }
-function sourceState(stamp: { status: string; fetchedAt: string | null }) { return stamp.status === "LIVE" || stamp.status === "FRESH" ? stamp.status === "LIVE" ? "LIVE · 최신 확인" : "FRESH · 최근 확인" : stamp.status === "STALE" ? "STALE · 다시 확인 필요" : "UNAVAILABLE · 현재 확인 불가"; }
-function Sources({ city }: { city: CitySnapshot }) { const providers = [{ name: "날씨", stamp: city.weather, href: city.weather.sourceUrl }, { name: "대기", stamp: city.air, href: city.air.sourceUrl }, { name: "원주시 새소식", stamp: city.notices, href: city.notices.sourceUrl }, { name: "원주 지도 설정", stamp: city.map, href: city.map.sourceUrl }]; return <main className="listing-page sources-page"><div className="page-intro page-intro--split"><div><span className="eyebrow">SOURCES & RIGHTS</span><h1>좋은 여행은<br /><em>근거에서.</em></h1></div><p>장소의 이유와 최신 운영 정보는 다른 종류의 사실입니다. 각각의 출처를 나눠 표시합니다.</p></div><section className="source-health"><div className="section-heading"><span className="eyebrow">LIVE SOURCES</span><h2>지금 확인한 데이터</h2></div>{providers.map((item) => <div className="source-health-row" key={item.name}><div><strong>{item.name}</strong><span>{item.stamp.provider}</span></div><b>{sourceState(item.stamp)}</b><small>{item.stamp.fetchedAt ? `확인 ${timeLabel(item.stamp.fetchedAt)}` : "확인 시각 없음"}</small><Source href={item.href}>원문</Source></div>)}</section><div className="source-table"><div><strong>원주관광·원주시</strong><span>장소 설명, 행사 일정, 공식 운영 정보의 시작점</span><Source href="https://www.wonju.go.kr/tour/index.do">원주관광</Source></div><div><strong>Kakao Local</strong><span>검색 시점에 원주 주소·좌표가 확인된 음식점·카페</span><Source href="https://developers.kakao.com/docs/ko/local/dev-guide">Kakao Local 가이드</Source></div><div><strong>사진 사용권</strong><span>장소 사진의 원문 라이선스와 변환 기록</span><Source href="/ASSET_LICENSES.md">사진 manifest 보기</Source></div><div><strong>실시간 데이터</strong><span>각 provider의 최신 확인 시각과 현재 상태를 위에서 보여드립니다.</span><Source href="https://www.weather.go.kr/">기상청</Source></div></div><section className="asset-register"><div className="section-heading"><span className="eyebrow">IMAGE REGISTER</span><h2>사진의 출처와 사용 범위</h2></div>{ASSET_RECORDS.map(([asset, subject, author, license, href]) => <div className="asset-register-row" key={asset}><strong>{subject}</strong><span>{asset}</span><small>{author} · {license}</small><Source href={href}>원문</Source></div>)}</section></main>; }
+function Now({ city }: { city: CitySnapshot }) {
+  const notices = city.notices.items.slice(0, 4);
+  return (
+    <main className="listing-page now-page">
+      <div className="page-intro page-intro--split">
+        <div>
+          <span className="eyebrow">WONJU NOW · {dateLabel()}</span>
+          <h1>
+            이번 달<br />
+            <em>원주.</em>
+          </h1>
+        </div>
+        <p>
+          다가오는 일정과 공식 소식을 날짜·출처와 함께 읽습니다. 행사 없는
+          날에도 상시 장소와 코스는 계속 열려 있습니다.
+        </p>
+      </div>
+      <section className="now-events">
+        <div className="section-heading">
+          <span className="eyebrow">UPCOMING EVENTS</span>
+          <h2>다가오는 일정</h2>
+        </div>
+        {UPCOMING_EVENTS.map((event) => (
+          <a
+            className="now-event"
+            href={event.source}
+            target="_blank"
+            rel="noreferrer"
+            key={event.title}
+          >
+            <time>{event.date}</time>
+            <div>
+              <h3>{event.title}</h3>
+              <p>{event.place}</p>
+            </div>
+            <span>
+              공식 일정 <Arrow />
+            </span>
+          </a>
+        ))}
+      </section>
+      <section className="official-notices">
+        <div className="section-heading">
+          <span className="eyebrow">OFFICIAL NOTICE</span>
+          <h2>원주시에서 새로 올라온 소식</h2>
+        </div>
+        {notices.length ? (
+          notices.map((notice) => (
+            <a
+              className="notice-row"
+              href={notice.canonicalUrl}
+              target="_blank"
+              rel="noreferrer"
+              key={notice.id}
+            >
+              <time>{notice.publishedAt}</time>
+              <strong>{notice.title}</strong>
+              <span>
+                {notice.department}
+                <Arrow />
+              </span>
+            </a>
+          ))
+        ) : (
+          <div className="empty-state">
+            <strong>현재 확인 가능한 소식이 없습니다.</strong>
+            <p>원주시청 공식 새소식에서 최신 내용을 확인하세요.</p>
+            <Source href={city.notices.sourceUrl}>원주시청 새소식</Source>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+function Plan({
+  city,
+  weatherState,
+}: {
+  city: CitySnapshot;
+  weatherState: WeatherPhase;
+}) {
+  const weather = city.weather;
+  const updated = timeLabel(weather.fetchedAt);
+  return (
+    <main className="listing-page plan-page">
+      <div className="page-intro page-intro--split">
+        <div>
+          <span className="eyebrow">TRAVEL PREP</span>
+          <h1>
+            출발 전에
+            <br />
+            <em>확인할 것.</em>
+          </h1>
+        </div>
+        <p>
+          오늘의 날씨와 이동 정보를 한 번에 확인하고, 원주에서 보낼 순서를
+          정해보세요.
+        </p>
+      </div>
+      <section
+        className={`prep-weather-feature prep-weather-feature--${weatherState}`}
+      >
+        <MeteoconIcon weather={weather} phase={weatherState} size="large" />
+        <div>
+          <span className="eyebrow">오늘 원주</span>
+          <h2>
+            {weatherState === "loading"
+              ? "날씨를 확인하는 중"
+              : weather.temperature === null
+                ? "날씨를 불러오지 못했어요"
+                : `${weather.temperature}° · ${weatherLabel(weather)}`}
+          </h2>
+          <p>{weatherTravelLine(weather, weatherState)}</p>
+        </div>
+        <div className="prep-weather-facts">
+          <span>
+            {weather.high === null ? "최고 —" : `최고 ${weather.high}°`} ·{" "}
+            {weather.low === null ? "최저 —" : `최저 ${weather.low}°`}
+          </span>
+          <span>
+            {weather.precipitationProbability === null
+              ? "강수확률 —"
+              : `강수확률 ${weather.precipitationProbability}%`}
+          </span>
+          <small>
+            {updated
+              ? `업데이트 ${updated}`
+              : weatherState === "loading"
+                ? "날씨를 확인하고 있어요"
+                : "현재 확인 불가"}{" "}
+            · <Source href={weather.sourceUrl}>공식 예보</Source>
+          </small>
+        </div>
+      </section>
+      <div className="prep-grid">
+        <a className="prep-card prep-card--water" href="/map">
+          <span className="eyebrow">01 · MAP</span>
+          <h2>지도와 목적지</h2>
+          <p>
+            원주 권역과 장소를 한눈에 보고, 상세에서 외부 길찾기로 이어가세요.
+          </p>
+          <Arrow />
+        </a>
+        <a className="prep-card" href="/plan/weather">
+          <span className="eyebrow">02 · WEATHER</span>
+          <h2>오늘의 날씨</h2>
+          <strong>
+            {weather.temperature === null
+              ? "확인 불가"
+              : `${weather.temperature}°`}
+          </strong>
+          <p>{weatherLabel(weather)}</p>
+          <Arrow />
+        </a>
+        <a
+          className="prep-card"
+          href="https://its.wonju.go.kr/"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <span className="eyebrow">03 · TRANSPORT</span>
+          <h2>원주시 교통정보센터</h2>
+          <p>도로 소통·버스·주차 정보의 공식 출발점입니다.</p>
+          <Arrow />
+        </a>
+        <a className="prep-card" href="/sources">
+          <span className="eyebrow">04 · SOURCES</span>
+          <h2>정보의 기준</h2>
+          <p>사진 사용권, 운영 정보, 실시간 provider의 상태를 확인하세요.</p>
+          <Arrow />
+        </a>
+      </div>
+    </main>
+  );
+}
+function Weather({
+  city,
+  weatherState,
+}: {
+  city: CitySnapshot;
+  weatherState: WeatherPhase;
+}) {
+  const weather = city.weather;
+  const updated = timeLabel(weather.fetchedAt);
+  return (
+    <main className="listing-page weather-page">
+      <div className="page-intro page-intro--split">
+        <div>
+          <span className="eyebrow">WONJU WEATHER</span>
+          <h1>
+            오늘 원주의
+            <br />
+            <em>하늘.</em>
+          </h1>
+        </div>
+        <p>기온과 비 소식, 특보를 확인하고 오늘의 순서를 정해보세요.</p>
+      </div>
+      <div className={`weather-readout weather-readout--${weatherState}`}>
+        <div className="weather-current">
+          <MeteoconIcon weather={weather} phase={weatherState} size="large" />
+          <div>
+            <span className="eyebrow">CURRENT</span>
+            <strong>
+              {weatherState === "loading" || weather.temperature === null
+                ? "—"
+                : `${weather.temperature}°`}
+            </strong>
+            <h2>
+              {weatherState === "loading"
+                ? "날씨 확인 중"
+                : weatherLabel(weather)}
+            </h2>
+            <p>
+              {updated
+                ? `최근 확인 ${updated}`
+                : weatherState === "loading"
+                  ? "날씨를 확인하고 있어요."
+                  : "현재 날씨를 불러오지 못했어요. 공식 예보를 열어보세요."}
+            </p>
+          </div>
+        </div>
+        <div className="weather-facts">
+          <div>
+            <span>최고 / 최저</span>
+            <b>
+              {weather.high === null ? "—" : `${weather.high}°`} /{" "}
+              {weather.low === null ? "—" : `${weather.low}°`}
+            </b>
+          </div>
+          <div>
+            <span>비 올 확률</span>
+            <b>
+              {weather.precipitationProbability === null
+                ? "—"
+                : `${weather.precipitationProbability}%`}
+            </b>
+          </div>
+          <div>
+            <span>특보</span>
+            <b>{alertLabel(city.alerts)}</b>
+          </div>
+        </div>
+      </div>
+      <div className="status-note">
+        <span className="status-dot" />
+        {weatherState === "success"
+          ? "LIVE"
+          : weatherState === "partial"
+            ? "일부 확인"
+            : weatherState === "stale"
+              ? "마지막 확인값"
+              : weatherState === "loading"
+                ? "확인 중"
+                : "확인 불가"}{" "}
+        · {weather.provider} <Source href={weather.sourceUrl}>공식 출처</Source>
+      </div>
+    </main>
+  );
+}
+type MapPoint = {
+  place: Place;
+  latitude: number;
+  longitude: number;
+  placeUrl: string;
+};
+function MapPage() {
+  const [points, setPoints] = useState<MapPoint[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [drag, setDrag] = useState<{
+    x: number;
+    y: number;
+    ox: number;
+    oy: number;
+  } | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">(
+    "loading",
+  );
+  useEffect(() => {
+    let active = true;
+    void Promise.all(
+      PLACES.map(async (place) => {
+        try {
+          const response = await fetch(
+            `/api/places?q=${encodeURIComponent(place.name)}`,
+          );
+          if (!response.ok) return null;
+          const data = (await response.json()) as {
+            places?: Array<{
+              name?: string;
+              latitude?: number;
+              longitude?: number;
+              placeUrl?: string;
+            }>;
+          };
+          const match = data.places?.find(
+            (item) =>
+              typeof item.latitude === "number" &&
+              typeof item.longitude === "number" &&
+              typeof item.placeUrl === "string",
+          );
+          return match
+            ? {
+                place,
+                latitude: match.latitude as number,
+                longitude: match.longitude as number,
+                placeUrl: match.placeUrl as string,
+              }
+            : null;
+        } catch {
+          return null;
+        }
+      }),
+    )
+      .then((items) => {
+        if (!active) return;
+        const next = items.filter((item): item is MapPoint => Boolean(item));
+        setPoints(next);
+        setStatus(next.length ? "ready" : "unavailable");
+        if (next[0]) setSelected(next[0].place.slug);
+      })
+      .catch(() => {
+        if (active) setStatus("unavailable");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const bounds = useMemo(() => {
+    const lats = points.map((point) => point.latitude);
+    const lons = points.map((point) => point.longitude);
+    return {
+      minLat: Math.min(...lats, 37.25),
+      maxLat: Math.max(...lats, 37.42),
+      minLon: Math.min(...lons, 127.82),
+      maxLon: Math.max(...lons, 128.02),
+    };
+  }, [points]);
+  const position = (point: MapPoint) => ({
+    left: `${((point.longitude - bounds.minLon) / Math.max(bounds.maxLon - bounds.minLon, 0.001)) * 86 + 7}%`,
+    top: `${(1 - (point.latitude - bounds.minLat) / Math.max(bounds.maxLat - bounds.minLat, 0.001)) * 78 + 7}%`,
+  });
+  const selectedPoint =
+    points.find((point) => point.place.slug === selected) ?? null;
+  const selectedPlace =
+    selectedPoint?.place ?? placeFor(selected ?? PLACES[0].slug);
+  const directionsUrl =
+    selectedPoint?.placeUrl ??
+    `https://map.kakao.com/?q=${encodeURIComponent(`${selectedPlace.name} 원주`)}`;
+  return (
+    <main className="map-page">
+      <div className="map-heading">
+        <div>
+          <span className="eyebrow">WONJU PLACE MAP</span>
+          <h1>
+            좌표가 확인된 곳부터
+            <br />
+            <em>지도에서 고르세요.</em>
+          </h1>
+        </div>
+        <p>
+          원주 장소의 좌표를 Kakao Local에서 확인해 표시합니다. 점을 누르면
+          장소와 외부 길찾기로 이어지고, 목록을 누르면 지도가 함께 선택됩니다.
+        </p>
+      </div>
+      <div className="map-layout">
+        <div className="map-live-shell">
+          <div className="map-live-toolbar">
+            <span>
+              {status === "loading"
+                ? "장소 좌표를 확인하고 있어요"
+                : status === "ready"
+                  ? `${points.length}곳의 좌표가 확인됐어요`
+                  : "좌표를 불러오지 못했어요"}
+            </span>
+            <div>
+              <button
+                type="button"
+                onClick={() => setScale((value) => Math.min(2.4, value + 0.2))}
+                aria-label="지도 확대"
+              >
+                ＋
+              </button>
+              <button
+                type="button"
+                onClick={() => setScale((value) => Math.max(1, value - 0.2))}
+                aria-label="지도 축소"
+              >
+                －
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setScale(1);
+                  setOffset({ x: 0, y: 0 });
+                }}
+                aria-label="지도 초기화"
+              >
+                초기화
+              </button>
+            </div>
+          </div>
+          <div
+            className="map-live-viewport"
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              setDrag({
+                x: event.clientX,
+                y: event.clientY,
+                ox: offset.x,
+                oy: offset.y,
+              });
+            }}
+            onPointerMove={(event) => {
+              if (drag)
+                setOffset({
+                  x: drag.ox + event.clientX - drag.x,
+                  y: drag.oy + event.clientY - drag.y,
+                });
+            }}
+            onPointerUp={() => setDrag(null)}
+            onPointerCancel={() => setDrag(null)}
+          >
+            <div
+              className="map-live-surface"
+              style={{
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+              }}
+            >
+              <div className="map-grid" aria-hidden="true" />
+              <div className="map-live-caption">원주 · 확인된 장소 좌표</div>
+              {points.map((point) => (
+                <button
+                  type="button"
+                  className={`map-marker ${selected === point.place.slug ? "active" : ""}`}
+                  style={position(point)}
+                  onClick={() => setSelected(point.place.slug)}
+                  key={point.place.slug}
+                  aria-label={`${point.place.name} 선택`}
+                >
+                  <span>{point.place.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="map-preview">
+            <div>
+              <span>
+                {selectedPlace.region} · {selectedPlace.type}
+              </span>
+              <strong>{selectedPlace.name}</strong>
+              <p>{selectedPlace.line}</p>
+            </div>
+            <a href={`/places/${selectedPlace.slug}`}>
+              상세 보기 <Arrow />
+            </a>
+            <a href={directionsUrl} target="_blank" rel="noreferrer">
+              외부 지도에서 길찾기 <Arrow />
+            </a>
+          </div>
+          {status === "unavailable" ? (
+            <div className="map-fallback">
+              좌표를 확인하지 못한 장소는 지도에 표시하지 않았습니다. 목록에서
+              공식 상세를 열거나 외부 지도를 직접 확인해보세요.
+            </div>
+          ) : null}
+        </div>
+        <div className="map-list">
+          <span className="eyebrow">EDITORIAL PLACES</span>
+          <h2>지도에서 고를 수 있는 장면</h2>
+          {PLACES.map((place) => (
+            <button
+              type="button"
+              className={`map-place ${selected === place.slug ? "active" : ""}`}
+              onClick={() => setSelected(place.slug)}
+              key={place.slug}
+            >
+              <span>{place.region}</span>
+              <strong>{place.name}</strong>
+              <small>{place.line}</small>
+              <Arrow />
+            </button>
+          ))}
+        </div>
+      </div>
+    </main>
+  );
+}
+function About({ city }: { city: CitySnapshot }) {
+  return (
+    <main className="listing-page about-page">
+      <div className="page-intro page-intro--split">
+        <div>
+          <span className="eyebrow">ABOUT WONJU</span>
+          <h1>
+            시간 위에 세워진
+            <br />
+            <em>원주.</em>
+          </h1>
+        </div>
+        <p>
+          역사·사람·문학이 오늘의 장소와 어떻게 이어지는지 공식 자료를 따라
+          읽습니다.
+        </p>
+      </div>
+      <div className="timeline">
+        {HISTORY_TIMELINE.map((item) => (
+          <article key={item.year}>
+            <strong>{item.year}</strong>
+            <div>
+              <h2>{item.title}</h2>
+              <p>{item.text}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="people-section">
+        <div className="section-heading">
+          <span className="eyebrow">PEOPLE OF WONJU</span>
+          <h2>도시를 만든 사람들</h2>
+        </div>
+        <div className="people-grid">
+          {HISTORICAL_PEOPLE.map((person) => (
+            <a
+              href={person.source}
+              target="_blank"
+              rel="noreferrer"
+              key={person.name}
+            >
+              <span>{person.label}</span>
+              <h3>{person.name}</h3>
+              <p>{person.text}</p>
+              <Arrow />
+            </a>
+          ))}
+        </div>
+      </div>
+      <div className="city-status">
+        <span className="eyebrow">CITY DATA</span>
+        <h2>현재 숫자는 공식 기준일과 함께.</h2>
+        <p>
+          인구{" "}
+          {city.population.population?.toLocaleString("ko-KR") ??
+            "현재 확인 불가"}{" "}
+          · {city.population.period ?? "기준일 확인 불가"}
+        </p>
+        <Source href={city.population.sourceUrl}>원주통계정보</Source>
+      </div>
+    </main>
+  );
+}
+function sourceState(stamp: { status: string; fetchedAt: string | null }) {
+  return stamp.status === "LIVE" || stamp.status === "FRESH"
+    ? stamp.status === "LIVE"
+      ? "LIVE · 최신 확인"
+      : "FRESH · 최근 확인"
+    : stamp.status === "STALE"
+      ? "STALE · 다시 확인 필요"
+      : "UNAVAILABLE · 현재 확인 불가";
+}
+function Sources({ city }: { city: CitySnapshot }) {
+  const providers = [
+    { name: "날씨", stamp: city.weather, href: city.weather.sourceUrl },
+    { name: "대기", stamp: city.air, href: city.air.sourceUrl },
+    {
+      name: "원주시 새소식",
+      stamp: city.notices,
+      href: city.notices.sourceUrl,
+    },
+    { name: "원주 지도 설정", stamp: city.map, href: city.map.sourceUrl },
+  ];
+  return (
+    <main className="listing-page sources-page">
+      <div className="page-intro page-intro--split">
+        <div>
+          <span className="eyebrow">SOURCES & RIGHTS</span>
+          <h1>
+            좋은 여행은
+            <br />
+            <em>근거에서.</em>
+          </h1>
+        </div>
+        <p>
+          장소의 이유와 최신 운영 정보는 다른 종류의 사실입니다. 각각의 출처를
+          나눠 표시합니다.
+        </p>
+      </div>
+      <section className="source-health">
+        <div className="section-heading">
+          <span className="eyebrow">LIVE SOURCES</span>
+          <h2>지금 확인한 데이터</h2>
+        </div>
+        {providers.map((item) => (
+          <div className="source-health-row" key={item.name}>
+            <div>
+              <strong>{item.name}</strong>
+              <span>{item.stamp.provider}</span>
+            </div>
+            <b>{sourceState(item.stamp)}</b>
+            <small>
+              {item.stamp.fetchedAt
+                ? `확인 ${timeLabel(item.stamp.fetchedAt)}`
+                : "확인 시각 없음"}
+            </small>
+            <Source href={item.href}>원문</Source>
+          </div>
+        ))}
+      </section>
+      <div className="source-table">
+        <div>
+          <strong>원주관광·원주시</strong>
+          <span>장소 설명, 행사 일정, 공식 운영 정보의 시작점</span>
+          <Source href="https://www.wonju.go.kr/tour/index.do">원주관광</Source>
+        </div>
+        <div>
+          <strong>Kakao Local</strong>
+          <span>검색 시점에 원주 주소·좌표가 확인된 음식점·카페</span>
+          <Source href="https://developers.kakao.com/docs/ko/local/dev-guide">
+            Kakao Local 가이드
+          </Source>
+        </div>
+        <div>
+          <strong>사진 사용권</strong>
+          <span>장소 사진의 원문 라이선스와 변환 기록</span>
+          <Source href="/ASSET_LICENSES.md">사진 manifest 보기</Source>
+        </div>
+        <div>
+          <strong>실시간 데이터</strong>
+          <span>
+            각 provider의 최신 확인 시각과 현재 상태를 위에서 보여드립니다.
+          </span>
+          <Source href="https://www.weather.go.kr/">기상청</Source>
+        </div>
+      </div>
+      <section className="asset-register">
+        <div className="section-heading">
+          <span className="eyebrow">IMAGE REGISTER</span>
+          <h2>사진의 출처와 사용 범위</h2>
+        </div>
+        {ASSET_RECORDS.map(([asset, subject, author, license, href]) => (
+          <div className="asset-register-row" key={asset}>
+            <strong>{subject}</strong>
+            <span>{asset}</span>
+            <small>
+              {author} · {license}
+            </small>
+            <Source href={href}>원문</Source>
+          </div>
+        ))}
+      </section>
+    </main>
+  );
+}
 
 export function StationApp({ route }: { route: string }) {
-  const [currentRoute, setCurrentRoute] = useState(route || "/"); const [city, setCity] = useState<CitySnapshot>(DEFAULT_CITY); const [weatherState, setWeatherState] = useState<WeatherPhase>("loading"); const [saved, setSaved] = useState<Set<string>>(new Set()); const [menuOpen, setMenuOpen] = useState(false); const [searchOpen, setSearchOpen] = useState(false); const [search, setSearch] = useState("");
-  useEffect(() => { try { setSaved(new Set(JSON.parse(window.localStorage.getItem("wonju-station:saved:v1") ?? "[]"))); } catch { /* empty local state */ } let active = true; void fetch("/api/weather").then((response) => response.ok ? response.json() : null).then((data) => { if (!active) return; if (data) { setCity((current) => ({ ...current, weather: data })); setWeatherState(weatherPhase(data)); } }).catch(() => { if (active) setWeatherState("unavailable"); }); void fetch("/api/notices").then((response) => response.ok ? response.json() : null).then((data) => { if (!active) return; if (data) setCity((current) => ({ ...current, notices: data })); }).catch(() => { /* the main city snapshot remains the fallback */ }); void fetch("/api/city").then((response) => response.ok ? response.json() : null).then((data) => { if (!active) return; if (data) { setCity(data); setWeatherState(weatherPhase(data.weather)); } }).catch(() => { /* the fast weather and notices surfaces own their visible states */ }); return () => { active = false; }; }, []);
-  useEffect(() => { const onPop = () => setCurrentRoute(`${window.location.pathname}${window.location.search}`); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
-  function navigate(href: string) { if (!href || !href.startsWith("/")) return; window.history.pushState({}, "", href); setCurrentRoute(href); setMenuOpen(false); setSearchOpen(false); window.scrollTo({ top: 0, behavior: "auto" }); }
-  function onSave(id: string) { setSaved((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); try { window.localStorage.setItem("wonju-station:saved:v1", JSON.stringify([...next])); } catch { /* storage may be disabled */ } return next; }); }
-  const path = currentRoute.split("?")[0]; const parts = path.split("/").filter(Boolean); const root = parts[0] ?? ""; const detailSlug = parts[1] ? decodeURIComponent(parts[1]) : undefined; const results = useMemo(() => search.trim() ? PLACES.filter((place) => `${place.name} ${place.line} ${place.region} ${place.tags.join(" ")}`.toLowerCase().includes(search.toLowerCase())).slice(0, 5) : [], [search]);
-  const title = root === "" ? "오늘의 원주" : root === "places" ? detailSlug ? placeFor(detailSlug).name : "어디 갈까" : root === "eat" ? "먹고 마시기" : root === "courses" ? "하루 코스" : root === "now" || root === "news" || root === "events" ? "지금 원주" : root === "map" ? "원주 지도" : root === "plan" && detailSlug === "weather" ? "오늘의 날씨" : root === "plan" || root === "weather" || root === "air" || root === "transport" ? "여행 준비" : root === "about" || root === "history" || root === "city" || root === "stats" || root === "population" || root === "people" ? "원주 읽기" : root === "sources" ? "출처와 사용권" : root === "saved" ? "저장한 여행" : "원주";
-  useEffect(() => { document.title = `${title} · WONJU STATION`; }, [title]);
-  let content: ReactNode; if (root === "") content = <Home city={city} weatherState={weatherState} />; else if (root === "places") content = <Places saved={saved} onSave={onSave} detailSlug={detailSlug} />; else if (root === "discover" || root === "lost" || root === "place") content = <Places saved={saved} onSave={onSave} />; else if (root === "eat") content = <Eat />; else if (root === "courses") content = <Courses saved={saved} onSave={onSave} detailSlug={detailSlug} />; else if (root === "now" || root === "news" || root === "events") content = <Now city={city} />; else if (root === "map") content = <MapPage />; else if (root === "plan" && detailSlug === "weather") content = <Weather city={city} weatherState={weatherState} />; else if (root === "plan" || root === "transport") content = <Plan city={city} weatherState={weatherState} />; else if (root === "weather" || root === "air") content = <Weather city={city} weatherState={weatherState} />; else if (root === "about" || ["history", "city", "stats", "population", "people", "projects"].includes(root)) content = <About city={city} />; else if (root === "sources") content = <Sources city={city} />; else if (root === "saved") content = <main className="listing-page saved-page"><div className="page-intro"><span className="eyebrow">SAVED TRIPS</span><h1>저장한<br /><em>여행.</em></h1><p>이 브라우저에만 저장됩니다. 마음에 든 장소와 코스를 출발 전에 다시 확인하세요.</p></div><div className="saved-list">{PLACES.filter((place) => saved.has(place.slug)).map((place) => <article className="saved-card" key={place.slug}><a href={`/places/${place.slug}`}><div className="saved-card-photo"><Photo place={place} /></div><div><strong>{place.name}</strong><span>{place.region} · {place.line}</span></div><Arrow /></a><button type="button" onClick={() => onSave(place.slug)} aria-label={`${place.name} 저장 해제`}>저장 해제</button></article>)}{saved.size === 0 ? <div className="empty-state"><strong>아직 저장한 장소가 없습니다.</strong><p>장소나 코스의 저장 버튼으로 여행을 모아보세요.</p><a href="/places">장소 둘러보기 <Arrow /></a></div> : null}</div></main>; else content = <Home city={city} weatherState={weatherState} />;
-  return <div className="station-app" onClick={(event) => { const target = event.target as HTMLElement; const anchor = target.closest("a"); if (!anchor) return; const href = anchor.getAttribute("href"); if (!href?.startsWith("/") || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return; event.preventDefault(); navigate(href); }}><header className="site-header"><a className="logo" href="/" aria-label="WONJU STATION 홈"><span className="logo-mark">W</span><span><b>WONJU</b><small>STATION</small></span></a><nav className="desktop-nav" aria-label="주 메뉴">{NAV.map(([href, label]) => <a className={isCurrent(href, path) ? "active" : ""} href={href} key={href}>{label}</a>)}</nav><div className="header-tools"><button onClick={() => setSearchOpen((value) => !value)} aria-expanded={searchOpen} aria-label="검색">⌕</button><a className="saved-link" href="/saved" aria-label="저장한 여행">♡ <span>{saved.size}</span></a><button className="menu-button" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-label="메뉴">☰</button></div></header>{searchOpen ? <div className="search-overlay"><div><span className="eyebrow">WONJU SEARCH</span><input autoFocus value={search} onChange={(event) => setSearch(event.target.value)} placeholder="장소, 코스, 이야기 검색" /></div>{results.length ? <div className="search-dropdown">{results.map((place) => <a href={`/places/${place.slug}`} key={place.slug}><span>{place.region}</span><strong>{place.name}</strong><small>{place.line}</small><Arrow /></a>)}</div> : search ? <div className="search-empty">자체 편집 콘텐츠에서 찾지 못했습니다. 먹거리 검색은 먹고 마시기에서 별도로 조회하세요.</div> : null}</div> : null}{menuOpen ? <nav className="mobile-menu">{NAV.map(([href, label]) => <a href={href} key={href}>{label}<Arrow /></a>)}<a href="/about/wonju">원주 읽기 <Arrow /></a><a href="/sources">출처와 사용권 <Arrow /></a></nav> : null}<div className="page-context"><span>{title}</span><span>{dateLabel()} · 원주, 강원</span></div>{city.alerts.label !== "NORMAL" && city.alerts.label !== "CHECK" && <a className="alert-strip" href="/plan/weather">여행 유의사항 · {city.alerts.title ?? city.alerts.label} <Arrow /></a>}{content}<footer className="site-footer"><div><a className="logo" href="/"><span className="logo-mark">W</span><span><b>WONJU</b><small>STATION</small></span></a><p>원주의 풍경·맛·문화를<br />하루의 동선으로 잇습니다.</p></div><div className="footer-links"><a href="/places">어디 갈까</a><a href="/eat">먹고 마시기</a><a href="/courses">하루 코스</a><a href="/plan">여행 준비</a><a href="/sources">출처와 사용권</a></div><small>WONJU STATION · editorial guide</small></footer><nav className="mobile-dock" aria-label="모바일 빠른 메뉴">{QUICK_NAV.map(([href, label]) => <a className={isCurrent(href, path) ? "active" : ""} href={href} key={href}><span aria-hidden="true">{label === "장소" ? "◌" : label === "먹거리" ? "⌁" : label === "코스" ? "↝" : "⌖"}</span><b>{label}</b></a>)}</nav></div>;
+  const [currentRoute, setCurrentRoute] = useState(route || "/");
+  const [city, setCity] = useState<CitySnapshot>(DEFAULT_CITY);
+  const [weatherState, setWeatherState] = useState<WeatherPhase>("loading");
+  const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    try {
+      setSaved(
+        new Set(
+          JSON.parse(
+            window.localStorage.getItem("wonju-station:saved:v1") ?? "[]",
+          ),
+        ),
+      );
+    } catch {
+      /* empty local state */
+    }
+    let active = true;
+    void fetch("/api/weather")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!active) return;
+        if (data) {
+          setCity((current) => ({ ...current, weather: data }));
+          setWeatherState(weatherPhase(data));
+        }
+      })
+      .catch(() => {
+        if (active) setWeatherState("unavailable");
+      });
+    void fetch("/api/notices")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!active) return;
+        if (data) setCity((current) => ({ ...current, notices: data }));
+      })
+      .catch(() => {
+        /* the main city snapshot remains the fallback */
+      });
+    void fetch("/api/city")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!active) return;
+        if (data) {
+          setCity(data);
+          setWeatherState(weatherPhase(data.weather));
+        }
+      })
+      .catch(() => {
+        /* the fast weather and notices surfaces own their visible states */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    const onPop = () =>
+      setCurrentRoute(`${window.location.pathname}${window.location.search}`);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  function navigate(href: string) {
+    if (!href || !href.startsWith("/")) return;
+    window.history.pushState({}, "", href);
+    setCurrentRoute(href);
+    setMenuOpen(false);
+    setSearchOpen(false);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+  function onSave(id: string) {
+    setSaved((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        window.localStorage.setItem(
+          "wonju-station:saved:v1",
+          JSON.stringify([...next]),
+        );
+      } catch {
+        /* storage may be disabled */
+      }
+      return next;
+    });
+  }
+  const path = currentRoute.split("?")[0];
+  const parts = path.split("/").filter(Boolean);
+  const root = parts[0] ?? "";
+  const detailSlug = parts[1] ? decodeURIComponent(parts[1]) : undefined;
+  const results = useMemo(
+    () =>
+      search.trim()
+        ? PLACES.filter((place) =>
+            `${place.name} ${place.line} ${place.region} ${place.tags.join(" ")}`
+              .toLowerCase()
+              .includes(search.toLowerCase()),
+          ).slice(0, 5)
+        : [],
+    [search],
+  );
+  const title =
+    root === ""
+      ? "오늘의 원주"
+      : root === "places"
+        ? detailSlug
+          ? placeFor(detailSlug).name
+          : "어디 갈까"
+        : root === "eat"
+          ? "먹고 마시기"
+          : root === "courses"
+            ? "하루 코스"
+            : root === "now" || root === "news" || root === "events"
+              ? "지금 원주"
+              : root === "map"
+                ? "원주 지도"
+                : root === "plan" && detailSlug === "weather"
+                  ? "오늘의 날씨"
+                  : root === "plan" ||
+                      root === "weather" ||
+                      root === "air" ||
+                      root === "transport"
+                    ? "여행 준비"
+                    : root === "about" ||
+                        root === "history" ||
+                        root === "city" ||
+                        root === "stats" ||
+                        root === "population" ||
+                        root === "people"
+                      ? "원주 읽기"
+                      : root === "sources"
+                        ? "출처와 사용권"
+                        : root === "saved"
+                          ? "저장한 여행"
+                          : "원주";
+  useEffect(() => {
+    document.title = `${title} · WONJU STATION`;
+  }, [title]);
+  let content: ReactNode;
+  if (root === "") content = <Home city={city} weatherState={weatherState} />;
+  else if (root === "places")
+    content = <Places saved={saved} onSave={onSave} detailSlug={detailSlug} />;
+  else if (root === "discover" || root === "lost" || root === "place")
+    content = <Places saved={saved} onSave={onSave} />;
+  else if (root === "eat") content = <Eat />;
+  else if (root === "courses")
+    content = <Courses saved={saved} onSave={onSave} detailSlug={detailSlug} />;
+  else if (root === "now" || root === "news" || root === "events")
+    content = <Now city={city} />;
+  else if (root === "map") content = <MapPage />;
+  else if (root === "plan" && detailSlug === "weather")
+    content = <Weather city={city} weatherState={weatherState} />;
+  else if (root === "plan" || root === "transport")
+    content = <Plan city={city} weatherState={weatherState} />;
+  else if (root === "weather" || root === "air")
+    content = <Weather city={city} weatherState={weatherState} />;
+  else if (
+    root === "about" ||
+    ["history", "city", "stats", "population", "people", "projects"].includes(
+      root,
+    )
+  )
+    content = <About city={city} />;
+  else if (root === "sources") content = <Sources city={city} />;
+  else if (root === "saved")
+    content = (
+      <main className="listing-page saved-page">
+        <div className="page-intro">
+          <span className="eyebrow">SAVED TRIPS</span>
+          <h1>
+            저장한
+            <br />
+            <em>여행.</em>
+          </h1>
+          <p>
+            이 브라우저에만 저장됩니다. 마음에 든 장소와 코스를 출발 전에 다시
+            확인하세요.
+          </p>
+        </div>
+        <div className="saved-list">
+          {PLACES.filter((place) => saved.has(place.slug)).map((place) => (
+            <article className="saved-card" key={place.slug}>
+              <a href={`/places/${place.slug}`}>
+                <div className="saved-card-photo">
+                  <Photo place={place} />
+                </div>
+                <div>
+                  <strong>{place.name}</strong>
+                  <span>
+                    {place.region} · {place.line}
+                  </span>
+                </div>
+                <Arrow />
+              </a>
+              <button
+                type="button"
+                onClick={() => onSave(place.slug)}
+                aria-label={`${place.name} 저장 해제`}
+              >
+                저장 해제
+              </button>
+            </article>
+          ))}
+          {saved.size === 0 ? (
+            <div className="empty-state">
+              <strong>아직 저장한 장소가 없습니다.</strong>
+              <p>장소나 코스의 저장 버튼으로 여행을 모아보세요.</p>
+              <a href="/places">
+                장소 둘러보기 <Arrow />
+              </a>
+            </div>
+          ) : null}
+        </div>
+      </main>
+    );
+  else content = <Home city={city} weatherState={weatherState} />;
+  const quickIcons = {
+    장소: Landmark,
+    먹거리: Utensils,
+    코스: Route,
+    지도: MapPinned,
+  } as const;
+  return (
+    <div
+      className="station-app"
+      onClick={(event) => {
+        const target = event.target as HTMLElement;
+        const anchor = target.closest("a");
+        if (!anchor) return;
+        const href = anchor.getAttribute("href");
+        if (
+          !href?.startsWith("/") ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        )
+          return;
+        event.preventDefault();
+        navigate(href);
+      }}
+    >
+      <header className="site-header">
+        <a className="logo" href="/" aria-label="WONJU STATION 홈">
+          <span className="logo-mark">W</span>
+          <span>
+            <b>WONJU</b>
+            <small>STATION</small>
+          </span>
+        </a>
+        <nav className="desktop-nav" aria-label="주 메뉴">
+          {NAV.map(([href, label]) => (
+            <a
+              className={isCurrent(href, path) ? "active" : ""}
+              href={href}
+              key={href}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+        <div className="header-tools">
+          <button
+            className="command-trigger"
+            onClick={() => setSearchOpen(true)}
+            aria-expanded={searchOpen}
+            aria-label="검색"
+          >
+            <Search aria-hidden="true" />
+            <span>검색</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <a
+            className="saved-link"
+            href="/saved"
+            aria-label={`저장한 여행 ${saved.size}개`}
+          >
+            <Heart aria-hidden="true" />
+            <span>{saved.size}</span>
+          </a>
+          <button
+            className="menu-button"
+            onClick={() => setMenuOpen(true)}
+            aria-expanded={menuOpen}
+            aria-label="전체 메뉴"
+          >
+            <Menu aria-hidden="true" />
+          </button>
+        </div>
+      </header>
+      <CommandPalette
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        query={search}
+        onQueryChange={setSearch}
+        places={results}
+        onNavigate={navigate}
+      />
+      <MobileNavigationDrawer
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        pathname={path}
+        savedCount={saved.size}
+        onNavigate={navigate}
+      />
+      <div className="page-context">
+        <span>{title}</span>
+        <span>{dateLabel()} · 원주, 강원</span>
+      </div>
+      {city.alerts.label !== "NORMAL" && city.alerts.label !== "CHECK" && (
+        <a className="alert-strip" href="/plan/weather">
+          여행 유의사항 · {city.alerts.title ?? city.alerts.label} <Arrow />
+        </a>
+      )}
+      {content}
+      <footer className="site-footer">
+        <div>
+          <a className="logo" href="/">
+            <span className="logo-mark">W</span>
+            <span>
+              <b>WONJU</b>
+              <small>STATION</small>
+            </span>
+          </a>
+          <p>
+            원주의 풍경·맛·문화를
+            <br />
+            하루의 동선으로 잇습니다.
+          </p>
+        </div>
+        <div className="footer-links">
+          <a href="/places">어디 갈까</a>
+          <a href="/eat">먹고 마시기</a>
+          <a href="/courses">하루 코스</a>
+          <a href="/plan">여행 준비</a>
+          <a href="/sources">출처와 사용권</a>
+        </div>
+        <small>WONJU STATION · editorial guide</small>
+      </footer>
+      <nav className="mobile-dock" aria-label="모바일 빠른 메뉴">
+        {QUICK_NAV.map(([href, label]) => {
+          const QuickIcon = quickIcons[label];
+          return (
+            <a
+              className={isCurrent(href, path) ? "active" : ""}
+              href={href}
+              key={href}
+            >
+              <QuickIcon aria-hidden="true" />
+              <b>{label}</b>
+            </a>
+          );
+        })}
+      </nav>
+    </div>
+  );
 }

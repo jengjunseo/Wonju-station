@@ -17,9 +17,12 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
     "@meteocons/svg": "^0.1.0",
     "@meteocons/svg-static": "^0.1.0",
+    "@radix-ui/react-dialog": "^1.1.23",
     "drizzle-orm": "0.45.2",
+    "lucide-react": "^1.45.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
